@@ -221,10 +221,12 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       SIG(sig += 'd');
       break;
     case FFI_TYPE_LONGDOUBLE:
-      // emscripten doesn't define HEAPU64 by default
-      const HEAPU64 = new BigInt64Array(HEAP8.buffer);
+#if WASM_BIGINT
       args.push(DEREF_U64(arg_ptr, 0));
       args.push(DEREF_U64(arg_ptr, 1));
+#else
+      throw new Error('longdouble marshalling nyi');
+#endif
       break;
     case FFI_TYPE_UINT8:
       args.push(HEAPU8[arg_ptr]);
@@ -471,7 +473,6 @@ ffi_prep_closure_loc_helper,
     }
     cur_ptr -= 4 * (sig.length - 1 - ret_by_arg);
     const args_ptr = cur_ptr;
-    const HEAPU64 = new BigInt64Array(HEAP8.buffer);
     for (let sig_idx = 1 + ret_by_arg; sig_idx < sig.length; sig_idx++) {
       const jsargs_idx = sig_idx - 1;
       const cargs_idx = jsargs_idx - ret_by_arg;
