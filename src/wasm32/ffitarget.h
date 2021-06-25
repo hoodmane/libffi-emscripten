@@ -46,9 +46,9 @@ typedef enum ffi_abi {
   FFI_LAST_ABI,
 #ifdef EMSCRIPTEN
   FFI_DEFAULT_ABI = FFI_WASM32_EMSCRIPTEN
-#else  
+#else
   FFI_DEFAULT_ABI = FFI_WASM32
-#endif  
+#endif
 } ffi_abi;
 
 #define FFI_CLOSURES 1
