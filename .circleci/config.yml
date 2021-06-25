@@ -114,7 +114,7 @@ jobs:
           name: run tests
           no_output_timeout: 1200
           command: |
-            pytest testsuite/test_libffi.py
+            pytest -k chrome testsuite/test_libffi.py
 
   test-selenium-firefox-bigint:
     <<: *defaults
@@ -164,7 +164,7 @@ jobs:
           name: run tests
           no_output_timeout: 1200
           command: |
-            pytest testsuite/test_libffi.py
+            pytest -k chrome testsuite/test_libffi.py
 
 workflows:
   version: 2
@@ -177,15 +177,15 @@ workflows:
       - test-node-bigint:
           requires:
             - install-emsdk
-      # - test-selenium-firefox:
-      #     requires:
-      #       - install-emsdk
+      - test-selenium-firefox:
+          requires:
+            - install-emsdk
       - test-selenium-chrome:
           requires:
             - install-emsdk
-      # - test-selenium-firefox-bigint:
-      #     requires:
-      #       - install-emsdk
+      - test-selenium-firefox-bigint:
+          requires:
+            - install-emsdk
       - test-selenium-chrome-bigint:
           requires:
             - install-emsdk
