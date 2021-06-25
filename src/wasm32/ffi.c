@@ -271,6 +271,7 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       const src_ptr = DEREF_U32(avalue, i);
       HEAP8.subarray(structs_addr, structs_addr + item_size)
           .set(HEAP8.subarray(src_ptr, src_ptr + item_size));
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_COMPLEX:
       throw new Error('complex marshalling nyi');
