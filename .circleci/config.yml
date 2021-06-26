@@ -36,7 +36,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - target
+            - emsdk
 
   test-node:
     <<: *defaults
@@ -68,7 +68,25 @@ jobs:
             source ./emsdk/emsdk_env.sh
             testsuite/emscripten-test-stuff/node-tests.sh --enable-wasm-bigint
 
-  build-selenium:
+  build-libffi:
+    <<: *defaults
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: build
+          command: |
+            source ./emsdk/emsdk_env.sh
+            ./build.sh
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target
+
+  build-selenium-tests:
     <<: *defaults
     steps:
       - checkout
@@ -80,7 +98,6 @@ jobs:
           name: build
           command: |
             source ./emsdk/emsdk_env.sh
-            ./build.sh
             cp -r testsuite/libffi.call testsuite/libffi.call.test
             cp -r testsuite/libffi.closures testsuite/libffi.closures.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
@@ -138,7 +155,6 @@ jobs:
           name: build
           command: |
             source ./emsdk/emsdk_env.sh
-            ./build.sh
             cp -r testsuite/libffi.call testsuite/libffi.call.test
             cp -r testsuite/libffi.closures testsuite/libffi.closures.test
             export EXTRA_LDFLAGS="-s WASM_BIGINT=1"
@@ -195,21 +211,29 @@ workflows:
       - test-node-bigint:
           requires:
             - install-emsdk
-      - build-selenium:
+
+      - build-libffi:
           requires:
             - install-emsdk
+
+      - build-selenium-tests:
+          requires:
+            - build-libffi
+
       - test-selenium-firefox:
           requires:
-            - build-selenium
+            - build-selenium-tests
       - test-selenium-chrome:
           requires:
-            - build-selenium
-      - build-selenium-bigint:
+            - build-selenium-tests
+
+      - build-selenium-tests-bigint:
           requires:
-            - install-emsdk
+            - build-libffi
+
       - test-selenium-firefox-bigint:
           requires:
-            - build-selenium-bigint
+            - build-selenium-tests-bigint
       - test-selenium-chrome-bigint:
           requires:
-            - build-selenium-bigint
+            - build-selenium-tests-bigint
