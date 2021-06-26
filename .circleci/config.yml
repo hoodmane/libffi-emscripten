@@ -36,7 +36,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - .
+            - target
 
   test-node:
     <<: *defaults
@@ -68,7 +68,7 @@ jobs:
             source ./emsdk/emsdk_env.sh
             testsuite/emscripten-test-stuff/node-tests.sh --enable-wasm-bigint
 
-  test-selenium-firefox:
+  build-selenium:
     <<: *defaults
     steps:
       - checkout
@@ -85,6 +85,18 @@ jobs:
             cp -r testsuite/libffi.closures testsuite/libffi.closures.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.closures.test
+      - persist_to_workspace:
+          root: .
+          paths:
+            - testsuite
+
+  test-selenium-firefox:
+    <<: *defaults
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
 
       - run:
           name: run tests
@@ -97,7 +109,27 @@ jobs:
       - store_test_results:
           path: test-result
 
+
   test-selenium-chrome:
+    <<: *defaults
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: run tests
+          no_output_timeout: 1200
+          command: |
+            git reset --hard
+            mkdir test-results
+            ls *
+            pytest --junitxml=test-results/junit.xml -k chrome testsuite/test_libffi.py
+      - store_test_results:
+          path: test-result
+
+  build-selenium-bigint:
     <<: *defaults
     steps:
       - checkout
@@ -112,19 +144,13 @@ jobs:
             ./build.sh
             cp -r testsuite/libffi.call testsuite/libffi.call.test
             cp -r testsuite/libffi.closures testsuite/libffi.closures.test
+            export EXTRA_LDFLAGS="-s WASM_BIGINT=1"
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.closures.test
-
-      - run:
-          name: run tests
-          no_output_timeout: 1200
-          command: |
-            git reset --hard
-            mkdir test-results
-            ls *
-            pytest --junitxml=test-results/junit.xml -k chrome testsuite/test_libffi.py
-      - store_test_results:
-          path: test-result
+      - persist_to_workspace:
+          root: .
+          paths:
+            - testsuite
 
   test-selenium-firefox-bigint:
     <<: *defaults
@@ -133,17 +159,6 @@ jobs:
 
       - attach_workspace:
           at: .
-
-      - run:
-          name: build
-          command: |
-            source ./emsdk/emsdk_env.sh
-            ./build.sh --enable-wasm-bigint
-            cp -r testsuite/libffi.call testsuite/libffi.call.test
-            cp -r testsuite/libffi.closures testsuite/libffi.closures.test
-            export EXTRA_LDFLAGS="-s WASM_BIGINT=1"
-            ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
-            ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.closures.test
 
       - run:
           name: run tests
@@ -163,17 +178,6 @@ jobs:
 
       - attach_workspace:
           at: .
-
-      - run:
-          name: build
-          command: |
-            source ./emsdk/emsdk_env.sh
-            ./build.sh --enable-wasm-bigint
-            cp -r testsuite/libffi.call testsuite/libffi.call.test
-            cp -r testsuite/libffi.closures testsuite/libffi.closures.test
-            export EXTRA_LDFLAGS="-s WASM_BIGINT=1"
-            ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
-            ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.closures.test
 
       - run:
           name: run tests
@@ -196,15 +200,21 @@ workflows:
       - test-node-bigint:
           requires:
             - install-emsdk
-      - test-selenium-firefox:
+      - build-selenium:
           requires:
             - install-emsdk
+      - test-selenium-firefox:
+          requires:
+            - build-selenium
       - test-selenium-chrome:
+          requires:
+            - build-selenium
+      - build-selenium-bigint:
           requires:
             - install-emsdk
       - test-selenium-firefox-bigint:
           requires:
-            - install-emsdk
+            - build-selenium-bigint
       - test-selenium-chrome-bigint:
           requires:
-            - install-emsdk
+            - build-selenium-bigint
