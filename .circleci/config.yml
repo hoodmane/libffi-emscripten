@@ -123,7 +123,7 @@ jobs:
             mkdir test-results
             pytest --junitxml=test-results/junit.xml -k firefox testsuite/test_libffi.py
       - store_test_results:
-          path: mkdir test-results
+          path: test-results
 
   test-selenium-chrome:
     <<: *defaults
