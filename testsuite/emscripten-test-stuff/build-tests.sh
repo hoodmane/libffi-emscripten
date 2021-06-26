@@ -1,6 +1,6 @@
 #!/bin/sh
 cd $1
-export CFLAGS="-fPIC -I../.. -I ../../target/include -I ../../include/ $EXTRA_CFLAGS"
+export CFLAGS="-fPIC -I../../target/include $EXTRA_CFLAGS"
 export LDFLAGS=" \
     -s EXPORT_ALL=1 \
     -s MODULARIZE=1 \
