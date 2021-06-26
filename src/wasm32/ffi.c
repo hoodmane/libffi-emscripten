@@ -220,120 +220,75 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
   var orig_stack_ptr = stackSave();
   var structs_addr = orig_stack_ptr;
   var varargs;
-  if (nfixedargs != nargs) {
-    var size = 0;
+  if (nfixedargs !== nargs) {
     for (var i = nfixedargs; i < nargs; i++) {
       var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
       var arg_type = arg_unboxed[0];
       var item = ffi_struct_size_and_alignment(arg_type);
       var item_size = item[0];
-      size += item_size;
+      structs_addr -= item_size;
+      var arg_ptr = DEREF_U32(avalue, i);
+      HEAP8.subarray(structs_addr, structs_addr + item_size)
+          .set(HEAP8.subarray(arg_ptr, arg_ptr + item_size));
     }
-    varargs = stackAlloc(size);
   }
-
-  for (var i = 0; i < nargs; i++) {
+  for (var i = 0; i < nfixedargs; i++) {
     var arg_ptr = DEREF_U32(avalue, i);
     var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
     var arg_type = arg_unboxed[0];
     var arg_type_id = arg_unboxed[1];
-    var vararg_offset = i - nfixedargs;
-    var fixed = vararg_offset < 0;
 
     switch (arg_type_id) {
     case FFI_TYPE_INT:
     case FFI_TYPE_SINT32:
-      if (fixed) {
-        args.push(DEREF_I32(arg_ptr, 0));
-        SIG(sig += 'i');
-      } else {
-        DEREF_I32(varargs, vararg_offset) = DEREF_I32(arg_ptr, 0);
-      }
+      args.push(DEREF_I32(arg_ptr, 0));
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_FLOAT:
-      if (fixed) {
-        args.push(DEREF_F32(arg_ptr, 0));
-        SIG(sig += 'f');
-      } else {
-        DEREF_F32(varargs, vararg_offset) = DEREF_F32(arg_ptr, 0);
-      }
+      args.push(DEREF_F32(arg_ptr, 0));
+      SIG(sig += 'f');
       break;
     case FFI_TYPE_DOUBLE:
-      if (fixed) {
-        args.push(DEREF_F64(arg_ptr, 0));
-        SIG(sig += 'd');
-      } else {
-        DEREF_F64(varargs, vararg_offset) = DEREF_F64(arg_ptr, 0);
-      }
+      args.push(DEREF_F64(arg_ptr, 0));
+      SIG(sig += 'd');
       break;
     case FFI_TYPE_LONGDOUBLE:
 #if WASM_BIGINT
-      if (fixed) {
-        args.push(DEREF_U64(arg_ptr, 0));
-        args.push(DEREF_U64(arg_ptr, 1));
-      } else {
-        DEREF_U64(varargs, vararg_offset) = DEREF_U64(arg_ptr, 0);
-        DEREF_U64(varargs, vararg_offset + 1) = DEREF_U64(arg_ptr, 1);
-      }
+      args.push(DEREF_U64(arg_ptr, 0));
+      args.push(DEREF_U64(arg_ptr, 1));
 #else
       throw new Error('longdouble marshalling nyi');
 #endif
       break;
     case FFI_TYPE_UINT8:
-      if (fixed) {
-        args.push(HEAPU8[arg_ptr]);
-        SIG(sig += 'i');
-      } else {
-        HEAPU8[varargs + vararg_offset] = HEAPU8[arg_ptr];
-      }
+      args.push(HEAPU8[arg_ptr]);
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_SINT8:
-      if (fixed) {
-        args.push(HEAP8[arg_ptr]);
-        SIG(sig += 'i');
-      } else {
-        HEAP8[varargs + vararg_offset] = HEAP8[arg_ptr];
-      }
+      args.push(HEAP8[arg_ptr]);
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_UINT16:
     case FFI_TYPE_SINT16:
-      if (fixed) {
-        args.push(DEREF_U16(arg_ptr, 0));
-        SIG(sig += 'i');
-      } else {
-        DEREF_U16(varargs, vararg_offset) = DEREF_U16(arg_ptr, 0)
-      }
+      args.push(DEREF_U16(arg_ptr, 0));
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_UINT32:
     case FFI_TYPE_POINTER:
-      if (fixed) {
-        args.push(DEREF_U32(arg_ptr, 0));
-        SIG(sig += 'i');
-      } else {
-        DEREF_U32(varargs, vararg_offset) = DEREF_U32(arg_ptr, 0)
-      }
+      args.push(DEREF_U32(arg_ptr, 0));
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_UINT64:
     case FFI_TYPE_SINT64:
 #if WASM_BIGINT
-      if (fixed) {
-        args.push(BigInt(DEREF_U32(arg_ptr, 0)) |
-                  (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32)));
-      } else {
-        DEREF_U64(varargs, vararg_offset) = BigInt(DEREF_U32(arg_ptr, 0)) |
-          (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32))
-      }
+      args.push(BigInt(DEREF_U32(arg_ptr, 0)) |
+                (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32)));
 #else
       // LEGALIZE_JS_FFI mode splits i64 (j) into two i32 args
       // for compatibility with JavaScript's f64-based numbers.
-      if (fixed) {
-        args.push(DEREF_U32(arg_ptr, 0));
-        args.push(DEREF_U32(arg_ptr, 1));
-        sig += 'j';
-      } else {
-        DEREF_U32(varargs, vararg_offset) = DEREF_U32(arg_ptr, 0);
-        DEREF_U32(varargs, vararg_offset + 1) = DEREF_U32(arg_ptr, 1);
-      }
+      args.push(DEREF_U32(arg_ptr, 0));
+      args.push(DEREF_U32(arg_ptr, 1));
+      sig += 'j';
 #endif
       break;
     case FFI_TYPE_STRUCT:
@@ -342,15 +297,11 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       var item_align = item[1];
       structs_addr -= item_size;
       structs_addr &= (~(item_align - 1));
-      if (fixed) {
-        args.push(structs_addr);
-        var src_ptr = DEREF_U32(avalue, i);
-        HEAP8.subarray(structs_addr, structs_addr + item_size)
-            .set(HEAP8.subarray(src_ptr, src_ptr + item_size));
-        SIG(sig += 'i');
-      } else {
-        throw new Error('variadic struct call nyi');
-      }
+      args.push(structs_addr);
+      var src_ptr = DEREF_U32(avalue, i);
+      HEAP8.subarray(structs_addr, structs_addr + item_size)
+           .set(HEAP8.subarray(src_ptr, src_ptr + item_size));
+      SIG(sig += 'i');
       break;
     case FFI_TYPE_COMPLEX:
       throw new Error('complex marshalling nyi');
