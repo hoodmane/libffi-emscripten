@@ -220,17 +220,15 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
   var orig_stack_ptr = stackSave();
   var structs_addr = orig_stack_ptr;
   var varargs;
-  if (nfixedargs !== nargs) {
-    for (var i = nfixedargs; i < nargs; i++) {
-      var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
-      var arg_type = arg_unboxed[0];
-      var item = ffi_struct_size_and_alignment(arg_type);
-      var item_size = item[0];
-      structs_addr -= item_size;
-      var arg_ptr = DEREF_U32(avalue, i);
-      HEAP8.subarray(structs_addr, structs_addr + item_size)
-          .set(HEAP8.subarray(arg_ptr, arg_ptr + item_size));
-    }
+  for (var i = nfixedargs; i < nargs; i++) {
+    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
+    var arg_type = arg_unboxed[0];
+    var item = ffi_struct_size_and_alignment(arg_type);
+    var item_size = item[0];
+    structs_addr -= item_size;
+    var arg_ptr = DEREF_U32(avalue, i);
+    HEAP8.subarray(structs_addr, structs_addr + item_size)
+        .set(HEAP8.subarray(arg_ptr, arg_ptr + item_size));
   }
   for (var i = 0; i < nfixedargs; i++) {
     var arg_ptr = DEREF_U32(avalue, i);
