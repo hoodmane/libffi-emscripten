@@ -31,8 +31,6 @@
 
 #include <emscripten/emscripten.h>
 
-ffi_status FFI_HIDDEN ffi_prep_cif_machdep(ffi_cif *cif) { return FFI_OK; }
-
 #define EM_JS_MACROS(ret, name, args, body...) EM_JS(ret, name, args, body)
 
 #define DEREF_U16(addr, offset) HEAPU16[(addr >> 1) + offset]
@@ -49,6 +47,7 @@ ffi_status FFI_HIDDEN ffi_prep_cif_machdep(ffi_cif *cif) { return FFI_OK; }
 #define CIF__NARGS(addr) DEREF_U32(addr, 1)
 #define CIF__ARGTYPES(addr) DEREF_U32(addr, 2)
 #define CIF__RTYPE(addr) DEREF_U32(addr, 3)
+#define CIF__NFIXEDARGS(addr) DEREF_U32(addr, 6)
 
 #define FFI_TYPE__SIZE(addr) DEREF_U32(addr, 0)
 #define FFI_TYPE__ALIGN(addr) DEREF_U16(addr + 4, 0)
@@ -62,6 +61,20 @@ ffi_status FFI_HIDDEN ffi_prep_cif_machdep(ffi_cif *cif) { return FFI_OK; }
 #else
 #define SIG(sig) sig
 #endif
+
+ffi_status FFI_HIDDEN
+ffi_prep_cif_machdep(ffi_cif *cif)
+{
+  cif->nfixedargs = cif->nargs;
+  return FFI_OK;
+}
+
+ffi_status FFI_HIDDEN
+ffi_prep_cif_machdep_var(ffi_cif *cif, unsigned nfixedargs, unsigned ntotalargs)
+{
+  cif->nfixedargs = nfixedargs;
+  return FFI_OK;
+}
 
 EM_JS_MACROS(
 void,
@@ -148,6 +161,7 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
   var rtype = rtype_unboxed[0];
   var rtype_id = rtype_unboxed[1];
+  var nfixedargs = CIF__NFIXEDARGS(cif);
 
   var args = [];
   var ret_by_arg = false;
@@ -204,66 +218,121 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
 
   var orig_stack_ptr = stackSave();
   var structs_addr = orig_stack_ptr;
+  var varargs;
+  if (nfixedargs != nargs) {
+    var size = 0;
+    for (var i = nfixedargs; i < nargs; i++) {
+      var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
+      var arg_type = arg_unboxed[0];
+      var item = ffi_struct_size_and_alignment(arg_type);
+      var item_size = item[0];
+      size += item_size;
+    }
+    varargs = stackAlloc(size);
+  }
+
   for (var i = 0; i < nargs; i++) {
     var arg_ptr = DEREF_U32(avalue, i);
     var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
     var arg_type = arg_unboxed[0];
     var arg_type_id = arg_unboxed[1];
+    var vararg_offset = i - nfixedargs;
+    var fixed = vararg_offset < 0;
 
     switch (arg_type_id) {
     case FFI_TYPE_INT:
     case FFI_TYPE_SINT32:
-      args.push(DEREF_I32(arg_ptr, 0));
-      SIG(sig += 'i');
+      if (fixed) {
+        args.push(DEREF_I32(arg_ptr, 0));
+        SIG(sig += 'i');
+      } else {
+        DEREF_I32(varargs, vararg_offset) = DEREF_I32(arg_ptr, 0);
+      }
       break;
     case FFI_TYPE_FLOAT:
-      args.push(DEREF_F32(arg_ptr, 0));
-      SIG(sig += 'f');
+      if (fixed) {
+        args.push(DEREF_F32(arg_ptr, 0));
+        SIG(sig += 'f');
+      } else {
+        DEREF_F32(varargs, vararg_offset) = DEREF_F32(arg_ptr, 0);
+      }
       break;
     case FFI_TYPE_DOUBLE:
-      args.push(DEREF_F64(arg_ptr, 0));
-      SIG(sig += 'd');
+      if (fixed) {
+        args.push(DEREF_F64(arg_ptr, 0));
+        SIG(sig += 'd');
+      } else {
+        DEREF_F64(varargs, vararg_offset) = DEREF_F64(arg_ptr, 0);
+      }
       break;
     case FFI_TYPE_LONGDOUBLE:
 #if WASM_BIGINT
-      args.push(DEREF_U64(arg_ptr, 0));
-      args.push(DEREF_U64(arg_ptr, 1));
+      if (fixed) {
+        args.push(DEREF_U64(arg_ptr, 0));
+        args.push(DEREF_U64(arg_ptr, 1));
+      } else {
+        DEREF_U64(varargs, vararg_offset) = DEREF_U64(arg_ptr, 0);
+        DEREF_U64(varargs, vararg_offset + 1) = DEREF_U64(arg_ptr, 1);
+      }
 #else
       throw new Error('longdouble marshalling nyi');
 #endif
       break;
     case FFI_TYPE_UINT8:
-      args.push(HEAPU8[arg_ptr]);
-      SIG(sig += 'i');
+      if (fixed) {
+        args.push(HEAPU8[arg_ptr]);
+        SIG(sig += 'i');
+      } else {
+        HEAPU8[varargs + vararg_offset] = HEAPU8[arg_ptr];
+      }
       break;
     case FFI_TYPE_SINT8:
-      args.push(HEAP8[arg_ptr]);
-      SIG(sig += 'i');
+      if (fixed) {
+        args.push(HEAP8[arg_ptr]);
+        SIG(sig += 'i');
+      } else {
+        HEAP8[varargs + vararg_offset] = HEAP8[arg_ptr];
+      }
       break;
     case FFI_TYPE_UINT16:
-      args.push(DEREF_U16(arg_ptr, 0));
-      SIG(sig += 'i');
-      break;
     case FFI_TYPE_SINT16:
-      args.push(DEREF_U16(arg_ptr, 0));
-      SIG(sig += 'i');
+      if (fixed) {
+        args.push(DEREF_U16(arg_ptr, 0));
+        SIG(sig += 'i');
+      } else {
+        DEREF_U16(varargs, vararg_offset) = DEREF_U16(arg_ptr, 0)
+      }
       break;
     case FFI_TYPE_UINT32:
     case FFI_TYPE_POINTER:
-      args.push(DEREF_U32(arg_ptr, 0));
-      SIG(sig += 'i');
+      if (fixed) {
+        args.push(DEREF_U32(arg_ptr, 0));
+        SIG(sig += 'i');
+      } else {
+        DEREF_U32(varargs, vararg_offset) = DEREF_U32(arg_ptr, 0)
+      }
       break;
     case FFI_TYPE_UINT64:
     case FFI_TYPE_SINT64:
 #if WASM_BIGINT
-      args.push(BigInt(DEREF_U32(arg_ptr, 0)) |
-                (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32)));
+      if (fixed) {
+        args.push(BigInt(DEREF_U32(arg_ptr, 0)) |
+                  (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32)));
+      } else {
+        DEREF_U64(varargs, vararg_offset) = BigInt(DEREF_U32(arg_ptr, 0)) |
+          (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32))
+      }
 #else
       // LEGALIZE_JS_FFI mode splits i64 (j) into two i32 args
       // for compatibility with JavaScript's f64-based numbers.
-      args.push(DEREF_U32(arg_ptr, 0));
-      args.push(DEREF_U32(arg_ptr, 1));
-      sig += 'j';
+      if (fixed) {
+        args.push(DEREF_U32(arg_ptr, 0));
+        args.push(DEREF_U32(arg_ptr, 1));
+        sig += 'j';
+      } else {
+        DEREF_U32(varargs, vararg_offset) = DEREF_U32(arg_ptr, 0);
+        DEREF_U32(varargs, vararg_offset + 1) = DEREF_U32(arg_ptr, 1);
+      }
 #endif
       break;
     case FFI_TYPE_STRUCT:
@@ -272,17 +341,25 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       var item_align = item[1];
       structs_addr -= item_size;
       structs_addr &= (~(item_align - 1));
-      args.push(structs_addr);
-      var src_ptr = DEREF_U32(avalue, i);
-      HEAP8.subarray(structs_addr, structs_addr + item_size)
-          .set(HEAP8.subarray(src_ptr, src_ptr + item_size));
-      SIG(sig += 'i');
+      if (fixed) {
+        args.push(structs_addr);
+        var src_ptr = DEREF_U32(avalue, i);
+        HEAP8.subarray(structs_addr, structs_addr + item_size)
+            .set(HEAP8.subarray(src_ptr, src_ptr + item_size));
+        SIG(sig += 'i');
+      } else {
+        throw new Error('variadic struct call nyi');
+      }
       break;
     case FFI_TYPE_COMPLEX:
       throw new Error('complex marshalling nyi');
     default:
       throw new Error('Unexpected type ' + arg_type_id);
     }
+  }
+
+  if (nfixedargs != nargs) {
+    args = args.concat(varargs);
   }
 
   stackRestore(structs_addr);
@@ -548,7 +625,8 @@ ffi_prep_closure_loc_helper,
 
 // EM_JS does not correctly handle function pointer arguments, so we need a
 // helper
-ffi_status ffi_prep_closure_loc(ffi_closure *closure, ffi_cif *cif,
+ffi_status
+ffi_prep_closure_loc(ffi_closure *closure, ffi_cif *cif,
                                 void (*fun)(ffi_cif *, void *, void **, void *),
                                 void *user_data, void *codeloc) {
   return ffi_prep_closure_loc_helper(closure, cif, (void *)fun, user_data,
