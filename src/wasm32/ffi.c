@@ -166,6 +166,7 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
   var args = [];
   var ret_by_arg = false;
 
+  var sig = "";
 #if WASM_BIGINT
   if (rtype_id === FFI_TYPE_COMPLEX) {
     throw new Error('complex ret marshalling nyi');
