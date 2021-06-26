@@ -99,7 +99,6 @@ jobs:
           paths:
             - testsuite
 
-
   test-selenium-firefox:
     <<: *defaults
     steps:
