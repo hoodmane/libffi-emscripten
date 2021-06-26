@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 cd $1
 export CFLAGS="-fPIC -I../../target/include $EXTRA_CFLAGS"
 export LDFLAGS=" \
