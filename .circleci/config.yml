@@ -80,7 +80,6 @@ jobs:
           command: |
             source ./emsdk/emsdk_env.sh
             ./build.sh
-            cp fficonfig.h target/include/
 
       - persist_to_workspace:
           root: .
