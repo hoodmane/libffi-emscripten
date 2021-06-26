@@ -205,18 +205,14 @@ workflows:
   build-and-test:
     jobs:
       - install-emsdk
-      - test-node:
-          requires:
-            - install-emsdk
-      - test-node-bigint:
-          requires:
-            - install-emsdk
 
       - build-libffi:
           requires:
             - install-emsdk
-
       - build-selenium-tests:
+          requires:
+            - build-libffi
+      - build-selenium-tests-bigint:
           requires:
             - build-libffi
 
@@ -227,13 +223,16 @@ workflows:
           requires:
             - build-selenium-tests
 
-      - build-selenium-tests-bigint:
-          requires:
-            - build-libffi
-
       - test-selenium-firefox-bigint:
           requires:
             - build-selenium-tests-bigint
       - test-selenium-chrome-bigint:
           requires:
             - build-selenium-tests-bigint
+
+      - test-node:
+          requires:
+            - install-emsdk
+      - test-node-bigint:
+          requires:
+            - install-emsdk
