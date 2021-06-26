@@ -143,7 +143,7 @@ jobs:
       - store_test_results:
           path: test-results
 
-  build-selenium-bigint:
+  build-selenium-tests-bigint:
     <<: *defaults
     steps:
       - checkout
