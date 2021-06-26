@@ -34,7 +34,7 @@
 #define EM_JS_MACROS(ret, name, args, body...) EM_JS(ret, name, args, body)
 
 #define DEREF_U16(addr, offset) HEAPU16[(addr >> 1) + offset]
-#define DEREF_I16(addr, offset) HEAPU16[(addr >> 1) + offset]
+#define DEREF_I16(addr, offset) HEAPI16[(addr >> 1) + offset]
 
 #define DEREF_U32(addr, offset) HEAPU32[(addr >> 2) + offset]
 #define DEREF_I32(addr, offset) HEAP32[(addr >> 2) + offset]
@@ -256,8 +256,11 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       SIG(sig += 'i');
       break;
     case FFI_TYPE_UINT16:
-    case FFI_TYPE_SINT16:
       args.push(DEREF_U16(arg_ptr, 0));
+      SIG(sig += 'i');
+      break;
+    case FFI_TYPE_SINT16:
+      args.push(DEREF_I16(arg_ptr, 0));
       SIG(sig += 'i');
       break;
     case FFI_TYPE_UINT32:
@@ -265,19 +268,24 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       args.push(DEREF_U32(arg_ptr, 0));
       SIG(sig += 'i');
       break;
+
+#if WASM_BIGINT
+    case FFI_TYPE_UINT64:
+      args.push(DEREF_U64(arg_ptr, 0));
+    break;
+    case FFI_TYPE_SINT64:
+      args.push(DEREF_I64(arg_ptr, 0));
+    break;
+#else
     case FFI_TYPE_UINT64:
     case FFI_TYPE_SINT64:
-#if WASM_BIGINT
-      args.push(BigInt(DEREF_U32(arg_ptr, 0)) |
-                (BigInt(DEREF_U32(arg_ptr, 1)) << BigInt(32)));
-#else
       // LEGALIZE_JS_FFI mode splits i64 (j) into two i32 args
       // for compatibility with JavaScript's f64-based numbers.
       args.push(DEREF_U32(arg_ptr, 0));
       args.push(DEREF_U32(arg_ptr, 1));
       sig += 'j';
+    break;
 #endif
-      break;
     case FFI_TYPE_STRUCT:
       var item = ffi_struct_size_and_alignment(arg_type);
       var item_size = item[0];
