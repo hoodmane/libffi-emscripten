@@ -219,17 +219,6 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
 
   var orig_stack_ptr = stackSave();
   var structs_addr = orig_stack_ptr;
-  var varargs;
-  for (var i = nfixedargs; i < nargs; i++) {
-    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
-    var arg_type = arg_unboxed[0];
-    var item = ffi_struct_size_and_alignment(arg_type);
-    var item_size = item[0];
-    structs_addr -= item_size;
-    var arg_ptr = DEREF_U32(avalue, i);
-    HEAP8.subarray(structs_addr, structs_addr + item_size)
-        .set(HEAP8.subarray(arg_ptr, arg_ptr + item_size));
-  }
   for (var i = 0; i < nfixedargs; i++) {
     var arg_ptr = DEREF_U32(avalue, i);
     var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
@@ -308,11 +297,25 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
     }
   }
 
+  var varargs = [];
+  var varargs_addr = structs_addr;
+  for (var i = nfixedargs; i < nargs; i++) {
+    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types, i));
+    var arg_type = arg_unboxed[0];
+    var item = ffi_struct_size_and_alignment(arg_type);
+    var item_size = item[0];
+    varargs_addr -= item_size;
+    varargs.push(varargs_addr);
+    var arg_ptr = DEREF_U32(avalue, i);
+    HEAP8.subarray(varargs_addr, varargs_addr + item_size)
+        .set(HEAP8.subarray(arg_ptr, arg_ptr + item_size));
+  }
+
   if (nfixedargs != nargs) {
     args = args.concat(varargs);
   }
 
-  stackRestore(structs_addr);
+  stackRestore(varargs_addr);
   console.log("calling fn", fn, args);
 #if WASM_BIGINT
   var result = wasmTable.get(fn).apply(null, args);
