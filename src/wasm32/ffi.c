@@ -34,13 +34,14 @@
 #define EM_JS_MACROS(ret, name, args, body...) EM_JS(ret, name, args, body)
 
 #define DEREF_U16(addr, offset) HEAPU16[(addr >> 1) + offset]
-#define DEREF_I16(addr, offset) HEAPI16[(addr >> 1) + offset]
+#define DEREF_I16(addr, offset) HEAP16[(addr >> 1) + offset]
 
 #define DEREF_U32(addr, offset) HEAPU32[(addr >> 2) + offset]
 #define DEREF_I32(addr, offset) HEAP32[(addr >> 2) + offset]
 #define DEREF_F32(addr, offset) HEAPF32[(addr >> 2) + offset]
 
 #define DEREF_U64(addr, offset) HEAPU64[(addr >> 3) + offset]
+#define DEREF_I64(addr, offset) HEAP64[(addr >> 3) + offset]
 #define DEREF_F64(addr, offset) HEAPF64[(addr >> 3) + offset]
 
 #define CIF__ABI(addr) DEREF_U32(addr, 0)
