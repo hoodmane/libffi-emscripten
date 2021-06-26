@@ -43,4 +43,3 @@ autoreconf -fiv
 emconfigure ./configure --host=$CHOST --prefix=$TARGET --enable-static --disable-shared --disable-dependency-tracking \
   --disable-builddir --disable-multi-os-directory --disable-raw-api --disable-structs
 make install
-cp fficonfig.h target/include/ffi
