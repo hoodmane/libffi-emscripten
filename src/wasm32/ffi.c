@@ -331,7 +331,6 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
     // extra normal argument which is the pointer to the varargs.
     args.push(cur_stack_ptr);
     // TODO: What does this mean?
-    stackRestore(cur_stack_ptr);
     // Now allocate variable struct args on stack too.
     for(var i = 0; i < struct_arg_info.length; i++) {
       var struct_info = struct_arg_info[i];
@@ -343,8 +342,9 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       HEAP8.subarray(cur_stack_ptr, cur_stack_ptr+size).set(HEAP8.subarray(arg_ptr, arg_ptr + size));
       DEREF_U32(arg_target, 0) = cur_stack_ptr;
     }
-
   }
+  STACK_ALLOC(cur_stack_ptr, 0, 4);
+  stackRestore(cur_stack_ptr);
   LOG_DEBUG("CALL_FUNC_PTR", fn, args);
   var result = CALL_FUNC_PTR(fn, args);
   // Put the stack pointer back (we moved it if we made a varargs call)
