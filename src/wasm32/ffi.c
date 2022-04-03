@@ -183,6 +183,8 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
   var rtype_ptr = rtype_unboxed[0];
   var rtype_id = rtype_unboxed[1];
+  var orig_stack_ptr = stackSave();
+  var cur_stack_ptr = orig_stack_ptr;
 
   var args = [];
   // Does our onwards call return by argument or normally? We return by argument
@@ -249,7 +251,13 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       break;
     case FFI_TYPE_STRUCT:
       // Nontrivial structs are passed by pointer.
-      args.push(arg_ptr);
+      // Have to copy the struct onto the stack though because C ABI says it's
+      // call by value.
+      var size = FFI_TYPE__SIZE(arg_type_ptr);
+      var align = FFI_TYPE__ALIGN(arg_type_ptr);
+      STACK_ALLOC(cur_stack_ptr, size, align);
+      HEAP8.subarray(cur_stack_ptr, cur_stack_ptr+size).set(HEAP8.subarray(arg_ptr, arg_ptr + size));
+      args.push(cur_stack_ptr);
       break;
     case FFI_TYPE_COMPLEX:
       throw new Error('complex marshalling nyi');
@@ -258,7 +266,6 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
     }
   }
 
-  var orig_stack_ptr = stackSave();
   // Wasm functions can't directly manipulate the callstack, so varargs
   // arguments have to go on a separate stack. A varags function takes one extra
   // argument which is a pointer to where on the separate stack the args are
@@ -269,7 +276,7 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
   // just always copy extra nonsense past the end. The ownwards call will know
   // not to look at it.
   if (nfixedargs != nargs) {
-    var varargs_addr = orig_stack_ptr;
+    var struct_arg_info = [];
     for (var i = nargs - 1;  i >= nfixedargs; i--) {
       var arg_ptr = DEREF_U32(avalue, i);
       var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
@@ -278,40 +285,42 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       switch (arg_type_id) {
       case FFI_TYPE_UINT8:
       case FFI_TYPE_SINT8:
-        STACK_ALLOC(varargs_addr, 1, 1);
-        DEREF_U8(varargs_addr, 0) = DEREF_U8(arg_ptr, 0);
+        STACK_ALLOC(cur_stack_ptr, 1, 1);
+        DEREF_U8(cur_stack_ptr, 0) = DEREF_U8(arg_ptr, 0);
         break;
       case FFI_TYPE_UINT16:
       case FFI_TYPE_SINT16:
-        STACK_ALLOC(varargs_addr, 2, 2);
-        DEREF_U16(varargs_addr, 0) = DEREF_U16(arg_ptr, 0);
+        STACK_ALLOC(cur_stack_ptr, 2, 2);
+        DEREF_U16(cur_stack_ptr, 0) = DEREF_U16(arg_ptr, 0);
         break;
       case FFI_TYPE_INT:
       case FFI_TYPE_UINT32:
       case FFI_TYPE_SINT32:
       case FFI_TYPE_POINTER:
       case FFI_TYPE_FLOAT:
-        STACK_ALLOC(varargs_addr, 4, 4);
-        DEREF_U32(varargs_addr, 0) = DEREF_U32(arg_ptr, 0);
+        STACK_ALLOC(cur_stack_ptr, 4, 4);
+        DEREF_U32(cur_stack_ptr, 0) = DEREF_U32(arg_ptr, 0);
         break;
       case FFI_TYPE_DOUBLE:
       case FFI_TYPE_UINT64:
       case FFI_TYPE_SINT64:
-        STACK_ALLOC(varargs_addr, 8, 8);
-        DEREF_U32(varargs_addr, 0) = DEREF_U32(arg_ptr, 0);
-        DEREF_U32(varargs_addr, 1) = DEREF_U32(arg_ptr, 1);
+        STACK_ALLOC(cur_stack_ptr, 8, 8);
+        DEREF_U32(cur_stack_ptr, 0) = DEREF_U32(arg_ptr, 0);
+        DEREF_U32(cur_stack_ptr, 1) = DEREF_U32(arg_ptr, 1);
         break;
       case FFI_TYPE_LONGDOUBLE:
-        STACK_ALLOC(varargs_addr, 16, 8);
-        DEREF_U32(varargs_addr, 0) = DEREF_U32(arg_ptr, 0);
-        DEREF_U32(varargs_addr, 1) = DEREF_U32(arg_ptr, 1);
-        DEREF_U32(varargs_addr, 2) = DEREF_U32(arg_ptr, 1);
-        DEREF_U32(varargs_addr, 3) = DEREF_U32(arg_ptr, 1);
+        STACK_ALLOC(cur_stack_ptr, 16, 8);
+        DEREF_U32(cur_stack_ptr, 0) = DEREF_U32(arg_ptr, 0);
+        DEREF_U32(cur_stack_ptr, 1) = DEREF_U32(arg_ptr, 1);
+        DEREF_U32(cur_stack_ptr, 2) = DEREF_U32(arg_ptr, 1);
+        DEREF_U32(cur_stack_ptr, 3) = DEREF_U32(arg_ptr, 1);
         break;
       case FFI_TYPE_STRUCT:
         // Again, struct must be passed by pointer.
-        STACK_ALLOC(varargs_addr, 4, 4);
-        DEREF_U32(varargs_addr, 0) = arg_ptr;
+        // But ABI is by value, so have to copy struct onto stack.
+        // Currently arguments are going onto stack so we can't put it there now. Come back for this.
+        STACK_ALLOC(cur_stack_ptr, 4, 4);
+        struct_arg_info.push([cur_stack_ptr, arg_ptr, FFI_TYPE__SIZE(arg_type_ptr), FFI_TYPE__ALIGN(arg_type_ptr)]);
         break;
       case FFI_TYPE_COMPLEX:
         throw new Error('complex arg marshalling nyi');
@@ -320,8 +329,21 @@ ffi_call, (ffi_cif * cif, ffi_fp fn, void *rvalue, void **avalue),
       }
     }
     // extra normal argument which is the pointer to the varargs.
-    args.push(varargs_addr);
-    stackRestore(varargs_addr);
+    args.push(cur_stack_ptr);
+    // TODO: What does this mean?
+    stackRestore(cur_stack_ptr);
+    // Now allocate variable struct args on stack too.
+    for(var i = 0; i < struct_arg_info.length; i++) {
+      var struct_info = struct_arg_info[i];
+      var arg_target = struct_info[0];
+      var arg_ptr = struct_info[1];
+      var size = struct_info[2];
+      var align = struct_info[3];
+      STACK_ALLOC(cur_stack_ptr, size, align);
+      HEAP8.subarray(cur_stack_ptr, cur_stack_ptr+size).set(HEAP8.subarray(arg_ptr, arg_ptr + size));
+      DEREF_U32(arg_target, 0) = cur_stack_ptr;
+    }
+
   }
   LOG_DEBUG("CALL_FUNC_PTR", fn, args);
   var result = CALL_FUNC_PTR(fn, args);
