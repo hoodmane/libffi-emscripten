@@ -32,7 +32,7 @@
 
 #include <emscripten/emscripten.h>
 
-#ifdef DEBUG_F 
+#ifdef DEBUG_F
 #define LOG_DEBUG(args...)  \
   console.warn(`====LIBFFI(line __LINE__)`, args)
 #else
@@ -474,11 +474,13 @@ ffi_prep_closure_loc_helper,
     throw new Error('Unexpected rtype ' + rtype_id);
   }
   var unboxed_arg_type_id_list = [];
+  var unboxed_arg_type_info_list = [];
   for (var i = 0; i < nargs; i++) {
     var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
     var arg_type_ptr = arg_unboxed[0];
     var arg_type_id = arg_unboxed[1];
     unboxed_arg_type_id_list.push(arg_type_id);
+    unboxed_arg_type_info_list.push([FFI_TYPE__SIZE(arg_type_ptr), FFI_TYPE__ALIGN(arg_type_ptr)]);
   }
   for (var i = 0; i < nfixedargs; i++) {
     switch (unboxed_arg_type_id_list[i]) {
@@ -545,6 +547,9 @@ ffi_prep_closure_loc_helper,
       // jsarg_idx might start out as 0 or 1 depending on ret_by_arg
       // it advances an extra time for long double
       var cur_arg = args[jsarg_idx++];
+      var arg_type_info = unboxed_arg_type_info_list[carg_idx];
+      var arg_size = arg_type_info[0];
+      var arg_align = arg_type_info[1];
       var arg_type_id = unboxed_arg_type_id_list[carg_idx];
       switch (arg_type_id) {
       case FFI_TYPE_UINT8:
@@ -571,7 +576,10 @@ ffi_prep_closure_loc_helper,
         break;
       case FFI_TYPE_STRUCT:
         // cur_arg is already a pointer to struct
-        DEREF_U32(args_ptr, carg_idx) = cur_arg;
+        // copy it onto stack to pass by value
+        STACK_ALLOC(cur_ptr, arg_size, arg_align);
+        HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(arg_ptr, arg_ptr + arg_size));
+        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
         break;
       case FFI_TYPE_FLOAT:
         STACK_ALLOC(cur_ptr, 4, 4);
@@ -598,7 +606,7 @@ ffi_prep_closure_loc_helper,
         break;
       }
     }
-    // If its a varargs call, last js argument is a pointer to the varargs. 
+    // If its a varargs call, last js argument is a pointer to the varargs.
     var varargs = args[args.length - 1];
     // We have no way of knowing how many varargs were actually provided, this
     // fills the rest of the stack space allocated with nonsense. The onward
@@ -609,10 +617,16 @@ ffi_prep_closure_loc_helper,
     // argument into args_ptr[i]
     for (var carg_idx = nfixedargs; carg_idx < nargs; carg_idx++) {
       var arg_type_id = unboxed_arg_type_id_list[carg_idx];
+      var arg_type_info = unboxed_arg_type_info_list[carg_idx];
+      var arg_size = arg_type_info[0];
+      var arg_align = arg_type_info[1];
       if (arg_type_id === FFI_TYPE_STRUCT) {
         // In this case varargs is a pointer to pointer to struct so we need to
         // deref once
-        DEREF_U32(args_ptr, carg_idx) = DEREF_U32(varargs, 0);
+        var struct_ptr = DEREF_U32(varargs, 0);
+        STACK_ALLOC(cur_ptr, arg_size, arg_align);
+        HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(struct_ptr, struct_ptr + arg_size));
+        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
       } else {
         DEREF_U32(args_ptr, carg_idx) = varargs;
       }
