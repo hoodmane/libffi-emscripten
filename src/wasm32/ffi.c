@@ -578,7 +578,7 @@ ffi_prep_closure_loc_helper,
         // cur_arg is already a pointer to struct
         // copy it onto stack to pass by value
         STACK_ALLOC(cur_ptr, arg_size, arg_align);
-        HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(arg_ptr, arg_ptr + arg_size));
+        HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(cur_arg, cur_arg + arg_size));
         DEREF_U32(args_ptr, carg_idx) = cur_ptr;
         break;
       case FFI_TYPE_FLOAT:
