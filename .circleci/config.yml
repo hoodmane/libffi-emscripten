@@ -95,7 +95,7 @@ jobs:
             - target
             - testsuite
 
-  test-firefox:
+  test-selenium-firefox:
     <<: *defaults
     steps:
       - checkout
@@ -113,7 +113,7 @@ jobs:
       - store_test_results:
           path: test-results
 
-  test-chrome:
+  test-selenium-chrome:
     <<: *defaults
     steps:
       - checkout
@@ -130,7 +130,7 @@ jobs:
       - store_test_results:
           path: test-results
 
-  test-firefox-bigint:
+  test-selenium-firefox-bigint:
     <<: *defaults
     steps:
       - checkout
@@ -148,7 +148,7 @@ jobs:
       - store_test_results:
           path: test-results
 
-  test-chrome-bigint:
+  test-selenium-chrome-bigint:
     <<: *defaults
     steps:
       - checkout
@@ -210,17 +210,17 @@ workflows:
           requires:
             - install-emsdk
 
-      - test-firefox:
+      - test-selenium-firefox:
           requires:
             - build-libffi
-      - test-chrome:
+      - test-selenium-chrome:
           requires:
             - build-libffi
 
-      - test-firefox-bigint:
+      - test-selenium-firefox-bigint:
           requires:
             - build-libffi-bigint
-      - test-chrome-bigint:
+      - test-selenium-chrome-bigint:
           requires:
             - build-libffi-bigint
 
