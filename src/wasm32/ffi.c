@@ -670,7 +670,7 @@ ffi_prep_closure_loc_helper,
   try {
     var wasm_trampoline = convertJsFunctionToWasm(trampoline, sig);
   } catch(e) {
-    return FFI_BAD_TYPEDEF;
+    return 1 /* FFI_BAD_TYPEDEF */;
   }
   wasmTable.set(codeloc, wasm_trampoline);
   CLOSURE__cif(closure) = cif;
