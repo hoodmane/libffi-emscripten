@@ -5,8 +5,8 @@ import pytest
 TEST_PATH = pathlib.Path(__file__).parents[0].resolve()
 
 xfails = {
-    "closure_loc_fn0" : "Not applicable -- codeloc doesn't point to closure",
-    "huge_struct" : "Function signature too long",
+    # "closure_loc_fn0" : "Not applicable -- codeloc doesn't point to closure",
+    # "huge_struct" : "Function signature too long",
 }
 
 def libffi_tests(self, selenium, libffi_test):
