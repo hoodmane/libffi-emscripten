@@ -1,27 +1,31 @@
-version: 2
+version: 2.1
 
-defaults: &defaults
-  working_directory: ~/repo
-  docker:
-    - image: hoodmane/pyodide-env:18
-  environment:
-    - EMSDK_NUM_CORES: 3
-      EMCC_CORES: 3
+executors:
+  linux-node:
+    docker:
+      - image: cimg/node:lts
+  linux-web:
+    docker:
+      # TODO: Remove in favor of `cimg/node:lts-browsers`?
+      # See: https://circleci.com/developer/images/image/cimg/node#browsers
+      - image: pyodide/pyodide-env:20221102-chrome107-firefox106
+
+commands:
+  emsdk-env:
+    description: "emsdk_env.sh"
+    steps:
+      - run:
+          name: emsdk_env.sh
+          command: |
+            # Prefer the default system-installed version of Node.js
+            echo "NODE_JS = '$(which node)'" >> ./emsdk/.emscripten
+            EMSDK_BASH=1 ./emsdk/emsdk construct_env >> $BASH_ENV
+            echo 'export EMSDK_NUM_CORES=3' >> $BASH_ENV
+            echo 'export EMCC_CORES=3' >> $BASH_ENV
 
 jobs:
-  # lint:
-  #   <<: *defaults
-  #   resource_class: small
-  #   steps:
-  #     - checkout
-
-  #     - run:
-  #         name: lint
-  #         command: make lint
-
-
   install-emsdk:
-    <<: *defaults
+    executor: linux-node
     steps:
       - checkout
       - run:
@@ -32,34 +36,31 @@ jobs:
             cd emsdk
             ./emsdk install latest
             ./emsdk activate latest
-
       - persist_to_workspace:
           root: .
           paths:
             - emsdk
 
   build-libffi:
-    <<: *defaults
+    executor: linux-node
     steps:
       - checkout
       - attach_workspace:
           at: .
-
       - run:
-          name: build
+          name: install automake
           command: |
-            source ./emsdk/emsdk_env.sh
-            ./build.sh
-
+            sudo apt-get update
+            sudo apt-get install automake
+      - emsdk-env
+      - run: ./build.sh
       - run:
           name: build tests
           command: |
-            source ./emsdk/emsdk_env.sh
             cp -r testsuite/libffi.call testsuite/libffi.call.test
             cp -r testsuite/libffi.closures testsuite/libffi.closures.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.closures.test
-
       - persist_to_workspace:
           root: .
           paths:
@@ -67,28 +68,26 @@ jobs:
             - testsuite
 
   build-libffi-bigint:
-    <<: *defaults
+    executor: linux-node
     steps:
       - checkout
       - attach_workspace:
           at: .
-
       - run:
-          name: build
+          name: install automake
           command: |
-            source ./emsdk/emsdk_env.sh
-            ./build.sh --enable-wasm-bigint
-
+            sudo apt-get update
+            sudo apt-get install automake
+      - emsdk-env
+      - run: ./build.sh --enable-wasm-bigint
       - run:
           name: build tests
           command: |
-            source ./emsdk/emsdk_env.sh
             cp -r testsuite/libffi.call testsuite/libffi.call.test
             cp -r testsuite/libffi.closures testsuite/libffi.closures.test
             export EXTRA_LD_FLAGS="-s WASM_BIGINT"
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.call.test
             ./testsuite/emscripten-test-stuff/build-tests.sh testsuite/libffi.closures.test
-
       - persist_to_workspace:
           root: .
           paths:
@@ -96,13 +95,11 @@ jobs:
             - testsuite
 
   test-firefox:
-    <<: *defaults
+    executor: linux-web
     steps:
       - checkout
-
       - attach_workspace:
           at: .
-
       - run:
           name: run tests
           no_output_timeout: 1200
@@ -114,13 +111,11 @@ jobs:
           path: test-results
 
   test-chrome:
-    <<: *defaults
+    executor: linux-web
     steps:
       - checkout
-
       - attach_workspace:
           at: .
-
       - run:
           name: run tests
           no_output_timeout: 1200
@@ -131,13 +126,11 @@ jobs:
           path: test-results
 
   test-firefox-bigint:
-    <<: *defaults
+    executor: linux-web
     steps:
       - checkout
-
       - attach_workspace:
           at: .
-
       - run:
           name: run tests
           no_output_timeout: 1200
@@ -149,13 +142,11 @@ jobs:
           path: test-results
 
   test-chrome-bigint:
-    <<: *defaults
+    executor: linux-web
     steps:
       - checkout
-
       - attach_workspace:
           at: .
-
       - run:
           name: run tests
           no_output_timeout: 1200
@@ -167,34 +158,29 @@ jobs:
           path: test-results
 
   test-node:
-    <<: *defaults
+    executor: linux-node
     steps:
       - checkout
-
       - attach_workspace:
           at: .
-
+      - emsdk-env
       - run:
           name: run tests
           no_output_timeout: 1200
           command: |
-            source ./emsdk/emsdk_env.sh
             testsuite/emscripten-test-stuff/node-tests.sh
 
   test-node-bigint:
-    <<: *defaults
+    executor: linux-node
     steps:
       - checkout
-
       - attach_workspace:
           at: .
-
+      - emsdk-env
       - run:
           name: run tests
           no_output_timeout: 1200
           command: |
-            source ./emsdk/emsdk_env.sh
-            sed -i'.old' "/^NODE_JS = /s/emsdk.*/\[&, '--experimental-wasm-bigint'\]/" $EM_CONFIG
             testsuite/emscripten-test-stuff/node-tests.sh --enable-wasm-bigint
 
 workflows:
