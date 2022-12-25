@@ -401,6 +401,8 @@ void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue) {
 #define CLOSURE__fun(addr) DEREF_U32(addr, 2)
 #define CLOSURE__user_data(addr) DEREF_U32(addr, 3)
 
+EM_JS_DEPS(ffi_closure_alloc_helper, "malloc,$getEmptyTableSlot");
+
 EM_JS_MACROS(void *, ffi_closure_alloc_helper, (size_t size, void **code), {
   var closure = _malloc(size);
   var index = getEmptyTableSlot();
@@ -414,6 +416,8 @@ ffi_closure_alloc(size_t size, void **code) {
   return ffi_closure_alloc_helper(size, code);
 }
 
+EM_JS_DEPS(ffi_closure_free_helper, "free");
+
 EM_JS_MACROS(void, ffi_closure_free_helper, (void *closure), {
   var index = CLOSURE__wrapper(closure);
   freeTableIndexes.push(index);
@@ -424,6 +428,8 @@ void __attribute__ ((visibility ("default")))
 ffi_closure_free(void *closure) {
   return ffi_closure_free_helper(closure);
 }
+
+EM_JS_DEPS(ffi_prep_closure_loc_helper, "$convertJsFunctionToWasm");
 
 EM_JS_MACROS(
 ffi_status,
