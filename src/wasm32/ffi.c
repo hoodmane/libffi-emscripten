@@ -434,7 +434,7 @@ EM_JS_DEPS(ffi_prep_closure_loc_helper, "$convertJsFunctionToWasm");
 EM_JS_MACROS(
 ffi_status,
 ffi_prep_closure_loc_helper,
-(ffi_closure * closure, ffi_cif *cif, void *fun, void *user_data, void *codeloc),
+(ffi_closure *closure, ffi_cif *cif, void *fun, void *user_data, void *codeloc),
 {
   var abi = CIF__ABI(cif);
   var nargs = CIF__NARGS(cif);
