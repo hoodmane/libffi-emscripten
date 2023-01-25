@@ -18,10 +18,12 @@ if [ "$WASM_BIGINT" = "true" ]; then
   # We need to detect WASM_BIGINT support at compile time
   export CFLAGS+=" -DWASM_BIGINT"
 fi
-export CXXFLAGS="$CFLAGS"
-export LDFLAGS="-sEXPORTED_FUNCTIONS=_main,_malloc,_free -sALLOW_TABLE_GROWTH -sASSERTIONS"
+export CXXFLAGS="$CFLAGS -sNO_DISABLE_EXCEPTION_CATCHING"
+export LDFLAGS="-sEXPORTED_FUNCTIONS=_main,_malloc,_free -sALLOW_TABLE_GROWTH -sASSERTIONS -sNO_DISABLE_EXCEPTION_CATCHING"
 if [ "$WASM_BIGINT" = "true" ]; then
   export LDFLAGS+=" -sWASM_BIGINT"
+else
+  export LDFLAGS+=" -sEXPORTED_RUNTIME_METHODS='getTempRet0,setTempRet0'"
 fi
 
 # Specific variables for cross-compilation
@@ -31,7 +33,5 @@ autoreconf -fiv
 emconfigure ./configure --host=$CHOST --enable-static --disable-shared \
   --disable-builddir --disable-multi-os-directory --disable-raw-api --disable-docs || (cat config.log && exit 1)
 make
-#EMMAKEN_JUST_CONFIGURE=1 emmake make check \
-#  RUNTESTFLAGS="libffi.closures/closure.exp LDFLAGS_FOR_TARGET='$LDFLAGS'" || (cat testsuite/libffi.log && exit 1)
 EMMAKEN_JUST_CONFIGURE=1 emmake make check \
-  RUNTESTFLAGS="LDFLAGS_FOR_TARGET='$LDFLAGS' -v -v" || (cat testsuite/libffi.log && exit 1)
+  RUNTESTFLAGS="LDFLAGS_FOR_TARGET='$LDFLAGS'" || (cat testsuite/libffi.log && exit 1)
