@@ -73,21 +73,6 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
 
 #define STORE_U64(addr, offset, val) \
     (DEREF_U64(addr, offset) = val)
-
-#else
-// No BigUint64Array, have to manually split / join lower and upper byte
-#define BIGINT_LOWER(x) (Number((x) & BigInt(0xffffffff)) | 0)
-#define BIGINT_UPPER(x) (Number((x) >> BigInt(32)) | 0)
-#define BIGINT_FROM_PAIR(lower, upper) \
-    (BigInt(lower) | (BigInt(upper) << BigInt(32)))
-
-#define LOAD_U64(addr, offset) \
-    BIGINT_FROM_PAIR(DEREF_U32(addr, offset*2), DEREF_U32(addr, offset*2 + 1))
-
-#define STORE_U64(addr, offset, val) (  \
-  (DEREF_U32(addr, offset*2) = BIGINT_LOWER(val)), \
-  (DEREF_U32(addr, offset*2+1) = BIGINT_UPPER(val)) \
-)
 #endif
 
 #define CIF__ABI(addr) DEREF_U32(addr, 0)
