@@ -42,14 +42,6 @@ emconfigure ./configure --prefix="`pwd`/target" --host=$CHOST --enable-static --
   || (cat config.log && exit 1)
 make
 
-# Warm up emscripten cache
-echo "int main(void){}" >> tmp.c
-emcc tmp.c -o ./tmp -O0 $LDFLAGS -L.libs -lffi -lm
-emcc tmp.c -o ./tmp -O1 $LDFLAGS -L.libs -lffi -lm
-emcc tmp.c -o ./tmp -O2 $LDFLAGS -L.libs -lffi -lm
-emcc tmp.c -o ./tmp -O3 $LDFLAGS -L.libs -lffi -lm
-
-
 
 EMMAKEN_JUST_CONFIGURE=1 emmake make check \
   RUNTESTFLAGS="LDFLAGS_FOR_TARGET='$LDFLAGS'" || (cat testsuite/libffi.log && exit 1)

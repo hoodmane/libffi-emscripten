@@ -216,6 +216,7 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
 
   SIG(var sig = "");
 
+#if !WASM_BIGINT
   switch(rtype_id) {
   case FFI_TYPE_VOID:
     SIG(sig = 'v');
@@ -244,11 +245,8 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
   case FFI_TYPE_SINT64:
     SIG(sig = 'j');
     break;
-  case FFI_TYPE_COMPLEX:
-    throw new Error('complex ret marshalling nyi');
-  default:
-    throw new Error('Unexpected rtype ' + rtype_id);
   }
+#endif
 
   // Accumulate a Javascript list of arguments for the Javascript wrapper for
   // the wasm function. The Javascript wrapper does a type conversion from
