@@ -499,6 +499,8 @@ ffi_closure_free(void *closure) {
 
 #if !WASM_BIGINT
 
+// This is basically the reverse of the Emscripten function
+// createDyncallWrapper.
 EM_JS(void, createLegalizerWrapper, (int sig, int trampoline), {
     var sections = [];
     var prelude = [
