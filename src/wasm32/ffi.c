@@ -619,7 +619,6 @@ EM_JS(void, createLegalizerWrapper, (int sig, int trampoline), {
     var module = new WebAssembly.Module(bytes);
     var instance = new WebAssembly.Instance(module, {
     'e': {
-      't': wasmTable,
       'r': getTempRet0,
       'f': trampoline,
     }
