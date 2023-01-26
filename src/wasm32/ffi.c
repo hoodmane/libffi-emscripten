@@ -109,11 +109,6 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
 
 #include <stddef.h>
 
-// I don't know why this has to be 16 but there are bugs if not.
-#define MAX_ALIGN 16
-// #define MAX_ALIGN 8
-// _Static_assert(MAX_ALIGN == __alignof__(max_align_t), "max_align_t must be 8");
-
 #define VARARGS_FLAG 1
 
 #define FFI_OK_MACRO 0
@@ -419,6 +414,7 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
     }
   }
   stackRestore(cur_stack_ptr);
+  stackAlloc(0); // stackAlloc enforces alignment invariants on the stack pointer
   var result = CALL_FUNCTION_POINTER(fn, args);
   // Put the stack pointer back (we moved it if we made a varargs call)
   stackRestore(orig_stack_ptr);
