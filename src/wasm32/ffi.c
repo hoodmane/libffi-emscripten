@@ -109,6 +109,11 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
 
 #include <stddef.h>
 
+// I don't know why this has to be 16 but there are bugs if not.
+#define MAX_ALIGN 16
+// #define MAX_ALIGN 8
+// _Static_assert(MAX_ALIGN == __alignof__(max_align_t), "max_align_t must be 8");
+
 #define VARARGS_FLAG 1
 
 #define FFI_OK_MACRO 0
