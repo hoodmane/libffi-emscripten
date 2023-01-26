@@ -622,8 +622,7 @@ EM_JS(void, createLegalizerWrapper, (int sig, int trampoline), {
       'f': trampoline,
     }
     });
-    var wrappedFunc = instance.exports['f'];
-    return wrappedFunc;
+    return instance.exports.f;
   }
 );
 #endif
