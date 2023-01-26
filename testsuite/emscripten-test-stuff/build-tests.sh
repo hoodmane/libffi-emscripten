@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 cd "$1"
-export CFLAGS="-fPIC -I../../target/include $EXTRA_CFLAGS"
+export CFLAGS="-fPIC -O2 -I../../target/include $EXTRA_CFLAGS"
 export CXXFLAGS="-fPIC -I../../target/include -sNO_DISABLE_EXCEPTION_CATCHING -g3 $EXTRA_CFLAGS"
 export LDFLAGS=" \
     -sEXPORT_ALL \

@@ -44,10 +44,12 @@ make
 
 # Warm up emscripten cache
 echo "int main(void){}" >> tmp.c
-emcc tmp.c -o ./tmp -O0 $LDFLAGS
-emcc tmp.c -o ./tmp -O1 $LDFLAGS
-emcc tmp.c -o ./tmp -O2 $LDFLAGS
-emcc tmp.c -o ./tmp -O3 $LDFLAGS
+emcc tmp.c -o ./tmp -O0 $LDFLAGS -L.libs -lffi -lm
+emcc tmp.c -o ./tmp -O1 $LDFLAGS -L.libs -lffi -lm
+emcc tmp.c -o ./tmp -O2 $LDFLAGS -L.libs -lffi -lm
+emcc tmp.c -o ./tmp -O3 $LDFLAGS -L.libs -lffi -lm
+
+
 
 EMMAKEN_JUST_CONFIGURE=1 emmake make check \
   RUNTESTFLAGS="LDFLAGS_FOR_TARGET='$LDFLAGS'" || (cat testsuite/libffi.log && exit 1)
