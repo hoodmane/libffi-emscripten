@@ -500,7 +500,7 @@ ffi_closure_free(void *closure) {
 
 #if !WASM_BIGINT
 
-EM_JS(void, createDyncallWrapper, (int sig, int trampoline), {
+EM_JS(void, createLegalizerWrapper, (int sig, int trampoline), {
     var sections = [];
     var prelude = [
       0x00, 0x61, 0x73, 0x6d, // magic ("\0asm")
@@ -514,6 +514,7 @@ EM_JS(void, createDyncallWrapper, (int sig, int trampoline), {
       // two 32 bit integers.
       sig.slice(1).replace(/j/g, "ii")
     ].join("");
+
 
     var typeSectionBody = [
       0x03, // number of types = 3
@@ -529,14 +530,8 @@ EM_JS(void, createDyncallWrapper, (int sig, int trampoline), {
 
     var importSection = [
       0x02, // import section code
-      0x15, // length of section in bytes
-      0x03, // number of imports = 2
-      // Import the wasmTable, which we will call "t"
-      0x01, 0x65, // name "e"
-      0x01, 0x74, // name "t"
-      0x01, 0x70, // importing a table
-      0x00, // with no max # of elements
-      0x00, // and min of 0 elements
+      0x0D, // length of section in bytes
+      0x02, // number of imports = 2
       // Import the getTempRet0 function, which we will call "r"
       0x01, 0x65, // name "e"
       0x01, 0x72, // name "r"
@@ -896,7 +891,7 @@ ffi_prep_closure_loc_helper,
     #else
     var wasm_trampoline;
     if(sig.includes("j")) {
-      wasm_trampoline = createDyncallWrapper(sig, trampoline);
+      wasm_trampoline = createLegalizerWrapper(sig, trampoline);
     } else {
       wasm_trampoline = convertJsFunctionToWasm(trampoline, sig);
     }
