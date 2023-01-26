@@ -501,7 +501,7 @@ ffi_closure_free(void *closure) {
 
 // This is basically the reverse of the Emscripten function
 // createDyncallWrapper.
-EM_JS(void, createLegalizerWrapper, (int sig, int trampoline), {
+EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
     var sections = [];
     var prelude = [
       0x00, 0x61, 0x73, 0x6d, // magic ("\0asm")
@@ -888,7 +888,7 @@ ffi_prep_closure_loc_helper,
     #else
     var wasm_trampoline;
     if(sig.includes("j")) {
-      wasm_trampoline = createLegalizerWrapper(sig, trampoline);
+      wasm_trampoline = createLegalizerWrapper(trampoline, sig);
     } else {
       wasm_trampoline = convertJsFunctionToWasm(trampoline, sig);
     }
