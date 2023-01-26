@@ -3,6 +3,13 @@
 # JS BigInt to Wasm i64 integration, disabled by default
 WASM_BIGINT=false
 
+emcc_exists="$(command -v emcc)"
+if [ ! "${emcc_exists}" ]; then
+  echo "Emscripten not on path"
+  exit 1
+fi
+
+
 # Parse arguments
 while [ $# -gt 0 ]; do
   case $1 in
@@ -13,7 +20,7 @@ while [ $# -gt 0 ]; do
 done
 
 # Common compiler flags
-export CFLAGS="-O3 -fPIC"
+export CFLAGS="-fPIC"
 if [ "$WASM_BIGINT" = "true" ]; then
   # We need to detect WASM_BIGINT support at compile time
   export CFLAGS+=" -DWASM_BIGINT"
@@ -30,8 +37,17 @@ fi
 export CHOST="wasm32-unknown-linux" # wasm32-unknown-emscripten
 
 autoreconf -fiv
-emconfigure ./configure --host=$CHOST --enable-static --disable-shared \
-  --disable-builddir --disable-multi-os-directory --disable-raw-api --disable-docs || (cat config.log && exit 1)
+emconfigure ./configure --prefix="`pwd`/target" --host=$CHOST --enable-static --disable-shared \
+  --disable-builddir --disable-multi-os-directory --disable-raw-api --disable-docs \
+  || (cat config.log && exit 1)
 make
+
+# Warm up emscripten cache
+echo "int main(void){}" >> tmp.c
+emcc tmp.c -o ./tmp -O0 $LDFLAGS
+emcc tmp.c -o ./tmp -O1 $LDFLAGS
+emcc tmp.c -o ./tmp -O2 $LDFLAGS
+emcc tmp.c -o ./tmp -O3 $LDFLAGS
+
 EMMAKEN_JUST_CONFIGURE=1 emmake make check \
   RUNTESTFLAGS="LDFLAGS_FOR_TARGET='$LDFLAGS'" || (cat testsuite/libffi.log && exit 1)
