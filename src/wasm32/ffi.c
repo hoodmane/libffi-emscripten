@@ -610,10 +610,8 @@ EM_JS(void, createLegalizerWrapper, (int sig, int trampoline), {
     uleb128Encode(codeBody.length, codeSection);
     codeSection.push.apply(codeSection, codeBody);
     sections.push(codeSection);
-    // var fs = require("fs");
 
     var bytes = new Uint8Array([].concat.apply([], sections));
-    // fs.writeFileSync("blah.wasm", bytes);
     // We can compile this wasm module synchronously because it is small.
     var module = new WebAssembly.Module(bytes);
     var instance = new WebAssembly.Instance(module, {
