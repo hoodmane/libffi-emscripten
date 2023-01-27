@@ -44,6 +44,8 @@ set tlist [lsort [glob -nocomplain -- $srcdir/$subdir/test-call.c]]
 set wasmbigint "false"
 if { [info exists ::env(WASM_BIGINT) ] } {
     set wasmbigint "$::env(WASM_BIGINT)"
+} else {
+    set wasmbigint "does not exist!"
 }
 
 set should_xfail_emscripten_firsttest false
