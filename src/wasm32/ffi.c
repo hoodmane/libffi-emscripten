@@ -482,129 +482,142 @@ ffi_closure_free(void *closure) {
 // This is basically the reverse of the Emscripten function
 // createDyncallWrapper.
 EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
-    var sections = [];
-    var prelude = [
-      0x00, 0x61, 0x73, 0x6d, // magic ("\0asm")
-      0x01, 0x00, 0x00, 0x00, // version: 1
-    ];
-    sections.push(prelude);
-    var wrappersig = [
-      // if return type is j, we will put the upper 32 bits into tempRet0.
-      sig[0].replace("j", "i"),
-      // in the rest of the argument list, one 64 bit integer is legalized into
-      // two 32 bit integers.
-      sig.slice(1).replace(/j/g, "ii")
-    ].join("");
+  var sections = [];
+  var prelude = [
+    0x00,
+    0x61,
+    0x73,
+    0x6d, // magic ("\0asm")
+    0x01,
+    0x00,
+    0x00,
+    0x00, // version: 1
+  ];
+  sections.push(prelude);
+  var wrappersig = [
+    // if return type is j, we will put the upper 32 bits into tempRet0.
+    sig[0].replace("j", "i"),
+    // in the rest of the argument list, one 64 bit integer is legalized into
+    // two 32 bit integers.
+    sig.slice(1).replace(/j/g, "ii"),
+  ].join("");
 
+  var typeSectionBody = [
+    0x03, // number of types = 3
+  ];
+  generateFuncType(wrappersig, typeSectionBody); // The signature of the wrapper we are generating
+  generateFuncType(sig, typeSectionBody); // the signature of the function pointer we will call
+  generateFuncType("i", typeSectionBody); // the signature of getTempRet0
 
-    var typeSectionBody = [
-      0x03, // number of types = 3
-    ];
-    generateFuncType(wrappersig, typeSectionBody); // The signature of the wrapper we are generating
-    generateFuncType(sig, typeSectionBody); // the signature of the function pointer we will call
-    generateFuncType("i", typeSectionBody); // the signature of setTempRet0
+  var typeSection = [0x01 /* Type section code */];
+  uleb128Encode(typeSectionBody.length, typeSection); // length of section in bytes
+  typeSection.push.apply(typeSection, typeSectionBody);
+  sections.push(typeSection);
 
-    var typeSection = [0x01 /* Type section code */];
-    uleb128Encode(typeSectionBody.length, typeSection); // length of section in bytes
-    typeSection.push.apply(typeSection, typeSectionBody);
-    sections.push(typeSection);
+  var importSection = [
+    0x02, // import section code
+    0x0d, // length of section in bytes
+    0x02, // number of imports = 2
+    // Import the getTempRet0 function, which we will call "r"
+    0x01,
+    0x65, // name "e"
+    0x01,
+    0x72, // name "r"
+    0x00, // importing a function
+    0x02, // type 2 = () -> i32
+    // Import the wrapped function, which we will call "f"
+    0x01,
+    0x65, // name "e"
+    0x01,
+    0x66, // name "f"
+    0x00, // importing a function
+    0x00, // type 0 = wrappersig
+  ];
+  sections.push(importSection);
 
-    var importSection = [
-      0x02, // import section code
-      0x0D, // length of section in bytes
-      0x02, // number of imports = 2
-      // Import the getTempRet0 function, which we will call "r"
-      0x01, 0x65, // name "e"
-      0x01, 0x72, // name "r"
-      0x00, // importing a function
-      0x02, // type 2
-      // Import the wrapped function, which we will call "f"
-      0x01, 0x65, // name "e"
-      0x01, 0x66, // name "f"
-      0x00, // importing a function
-      0x00, // type 0
-    ];
-    sections.push(importSection);
+  var functionSection = [
+    0x03, // function section code
+    0x02, // length of section in bytes
+    0x01, // number of functions = 1
+    0x01, // type 1 = sig
+  ];
+  sections.push(functionSection);
 
-    var functionSection = [
-      0x03, // function section code
-      0x02, // length of section in bytes
-      0x01, // number of functions = 1
-      0x01, // type 1 = sig
-    ];
-    sections.push(functionSection);
+  var exportSection = [
+    0x07, // export section code
+    0x05, // length of section in bytes
+    0x01, // One export
+    0x01,
+    0x66, // name "f"
+    0x00, // type: function
+    0x02, // function index 2 = the wrapper function
+  ];
+  sections.push(exportSection);
 
-    var exportSection = [
-      0x07, // export section code
-      0x05, // length of section in bytes
-      0x01, // One export
-      0x01, 0x66, // name "f"
-      0x00, // type: function
-      0x02, // function index 2 = the wrapper function
-    ];
-    sections.push(exportSection);
+  var convert_code = [];
+  convert_code.push(0x00); // no local variables (except the arguments)
 
-    var convert_code = [];
-    convert_code.push(0x00); // no local variables (except the arguments)
-
-    function localGet(j) {
-      convert_code.push(0x20); // local.get
-      uleb128Encode(j, convert_code);
-    }
-
-    for (var i = 1; i < sig.length; i++) {
-      if (sig[i] == "j") {
-        localGet(i - 1);        
-        convert_code.push(
-          0xa7, // i32.wrap_i64
-        );
-        localGet(i - 1);
-        convert_code.push(
-          0x42, 0x20, // i64.const 32
-          0x88, // i64.shr_u
-          0xa7, // i32.wrap_i64
-        );
-      } else {
-        localGet(i - 1);
-      }
-    }
-    convert_code.push(
-      0x10, 0x01,  // call f
-    );
-    if (sig[0] === "j") {
-      convert_code.push(
-        0xad, // i64.extend_i32_unsigned
-        0x10, 0x00, // Call function 0 (r)
-      );
-      convert_code.push(
-        0xac, // i64.extend_i32_signed
-        0x42, 0x20, // i64.const 32
-        0x86, // i64.shl,
-        0x84, // i64.or
-      );
-    }
-    convert_code.push(0x0b); // end
-
-    var codeBody = [0x01]; // one code
-    uleb128Encode(convert_code.length, codeBody);
-    codeBody.push.apply(codeBody, convert_code);
-    var codeSection = [0x0A /* Code section code */];
-    uleb128Encode(codeBody.length, codeSection);
-    codeSection.push.apply(codeSection, codeBody);
-    sections.push(codeSection);
-
-    var bytes = new Uint8Array([].concat.apply([], sections));
-    // We can compile this wasm module synchronously because it is small.
-    var module = new WebAssembly.Module(bytes);
-    var instance = new WebAssembly.Instance(module, {
-    'e': {
-      'r': getTempRet0,
-      'f': trampoline,
-    }
-    });
-    return instance.exports.f;
+  function localGet(j) {
+    convert_code.push(0x20); // local.get
+    uleb128Encode(j, convert_code);
   }
-);
+
+  for (var i = 1; i < sig.length; i++) {
+    if (sig[i] == "j") {
+      localGet(i - 1);
+      convert_code.push(
+        0xa7 // i32.wrap_i64
+      );
+      localGet(i - 1);
+      convert_code.push(
+        0x42,
+        0x20, // i64.const 32
+        0x88, // i64.shr_u
+        0xa7 // i32.wrap_i64
+      );
+    } else {
+      localGet(i - 1);
+    }
+  }
+  convert_code.push(
+    0x10,
+    0x01 // call f
+  );
+  if (sig[0] === "j") {
+    convert_code.push(
+      0xad, // i64.extend_i32_unsigned
+      0x10,
+      0x00 // Call function 0 (r)
+    );
+    convert_code.push(
+      0xac, // i64.extend_i32_signed
+      0x42,
+      0x20, // i64.const 32
+      0x86, // i64.shl,
+      0x84 // i64.or
+    );
+  }
+  convert_code.push(0x0b); // end
+
+  var codeBody = [0x01]; // one code
+  uleb128Encode(convert_code.length, codeBody);
+  codeBody.push.apply(codeBody, convert_code);
+  var codeSection = [0x0a /* Code section code */];
+  uleb128Encode(codeBody.length, codeSection);
+  codeSection.push.apply(codeSection, codeBody);
+  sections.push(codeSection);
+
+  var bytes = new Uint8Array([].concat.apply([], sections));
+  // We can compile this wasm module synchronously because it is small.
+  var module = new WebAssembly.Module(bytes);
+  var instance = new WebAssembly.Instance(module, {
+    e: {
+      r: getTempRet0,
+      f: trampoline,
+    },
+  });
+  return instance.exports.f;
+});
 #endif
 
 EM_JS_MACROS(
