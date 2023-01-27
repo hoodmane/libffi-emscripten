@@ -68,11 +68,6 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
 #if WASM_BIGINT
 // We have HEAPU64 in this case.
 #define DEREF_U64(addr, offset) HEAPU64[(addr >> 3) + offset]
-#define LOAD_U64(addr,offset) \
-    DEREF_U64(addr, offset)
-
-#define STORE_U64(addr, offset, val) \
-    (DEREF_U64(addr, offset) = val)
 #endif
 
 #define CIF__ABI(addr) DEREF_U32(addr, 0)
@@ -280,7 +275,7 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
     case FFI_TYPE_UINT64:
     case FFI_TYPE_SINT64:
       #if WASM_BIGINT
-      args.push(LOAD_U64(arg_ptr, 0));
+      args.push(DEREF_U64(arg_ptr, 0));
       #else
       args.push(DEREF_U32(arg_ptr, 0));
       args.push(DEREF_U32(arg_ptr, 1));
@@ -290,8 +285,8 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
     case FFI_TYPE_LONGDOUBLE:
       // long double is passed as a pair of BigInts.
       #if WASM_BIGINT
-      args.push(LOAD_U64(arg_ptr, 0));
-      args.push(LOAD_U64(arg_ptr, 1));
+      args.push(DEREF_U64(arg_ptr, 0));
+      args.push(DEREF_U64(arg_ptr, 1));
       #else
       args.push(DEREF_U32(arg_ptr, 0));
       args.push(DEREF_U32(arg_ptr, 1));
@@ -436,7 +431,7 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
   case FFI_TYPE_UINT64:
   case FFI_TYPE_SINT64:
     #if WASM_BIGINT
-    STORE_U64(rvalue, 0, result);
+    DEREF_U64(rvalue, 0) = result;
     #else
     DEREF_U32(rvalue, 0) = result;
     DEREF_U32(rvalue, 1) = Module['getTempRet0']();
@@ -787,7 +782,7 @@ ffi_prep_closure_loc_helper,
         STACK_ALLOC(cur_ptr, 8, 8);
         DEREF_U32(args_ptr, carg_idx) = cur_ptr;
         #if WASM_BIGINT
-        STORE_U64(cur_ptr, 0, cur_arg);
+        DEREF_U64(cur_ptr, 0) = cur_arg;
         #else
         DEREF_U32(cur_ptr, 0) = cur_arg;
         cur_arg = args[jsarg_idx++];
@@ -798,9 +793,9 @@ ffi_prep_closure_loc_helper,
         STACK_ALLOC(cur_ptr, 16, 8);
         DEREF_U32(args_ptr, carg_idx) = cur_ptr;
         #if WASM_BIGINT
-        STORE_U64(cur_ptr, 0, cur_arg);
+        DEREF_U64(cur_ptr, 0) = cur_arg;
         cur_arg = args[jsarg_idx++];
-        STORE_U64(cur_ptr, 1, cur_arg);
+        DEREF_U64(cur_ptr, 1) = cur_arg;
         #else
         DEREF_U32(cur_ptr, 0) = cur_arg;
         cur_arg = args[jsarg_idx++];
@@ -855,7 +850,7 @@ ffi_prep_closure_loc_helper,
         return DEREF_U32(ret_ptr, 0);
       case "j":
         #if WASM_BIGINT
-        return LOAD_U64(ret_ptr, 0);
+        return DEREF_U64(ret_ptr, 0);
         #else
         setTempRet0(DEREF_U32(ret_ptr, 1));
         return DEREF_U32(ret_ptr, 0);
