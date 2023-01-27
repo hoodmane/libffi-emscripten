@@ -21,6 +21,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+echo "WASM_BIGINT Enabled? $WASM_BIGINT"
+
 # Common compiler flags
 export CFLAGS="-fPIC"
 if [ "$WASM_BIGINT" = "true" ]; then
