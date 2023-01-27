@@ -6,9 +6,6 @@ defaults: &defaults
     # Built from:
     # https://github.com/pyodide/pyodide/blob/2ab4b0ab6aefe99fd994bb4f9ab086e5c0aebb7b/Dockerfile
     - image: pyodide/pyodide-env:20230126-chrome109-firefox109-py311
-  environment:
-    - EMSDK_NUM_CORES: 3
-      EMCC_CORES: 3
 
 jobs:
   install-emsdk:
@@ -95,7 +92,6 @@ jobs:
         type: string
         default: ""
 
-      
     <<: *defaults
     steps:
       - checkout
