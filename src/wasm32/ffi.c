@@ -484,14 +484,8 @@ ffi_closure_free(void *closure) {
 EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
   var sections = [];
   var prelude = [
-    0x00,
-    0x61,
-    0x73,
-    0x6d, // magic ("\0asm")
-    0x01,
-    0x00,
-    0x00,
-    0x00, // version: 1
+    0x00, 0x61, 0x73, 0x6d, // magic ("\0asm")
+    0x01, 0x00, 0x00, 0x00, // version: 1
   ];
   sections.push(prelude);
   var wrappersig = [
@@ -519,17 +513,13 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
     0x0d, // length of section in bytes
     0x02, // number of imports = 2
     // Import the getTempRet0 function, which we will call "r"
-    0x01,
-    0x65, // name "e"
-    0x01,
-    0x72, // name "r"
+    0x01, 0x65, // name "e"
+    0x01, 0x72, // name "r"
     0x00, // importing a function
     0x02, // type 2 = () -> i32
     // Import the wrapped function, which we will call "f"
-    0x01,
-    0x65, // name "e"
-    0x01,
-    0x66, // name "f"
+    0x01, 0x65, // name "e"
+    0x01, 0x66, // name "f"
     0x00, // importing a function
     0x00, // type 0 = wrappersig
   ];
@@ -547,8 +537,7 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
     0x07, // export section code
     0x05, // length of section in bytes
     0x01, // One export
-    0x01,
-    0x66, // name "f"
+    0x01, 0x66, // name "f"
     0x00, // type: function
     0x02, // function index 2 = the wrapper function
   ];
@@ -570,8 +559,7 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
       );
       localGet(i - 1);
       convert_code.push(
-        0x42,
-        0x20, // i64.const 32
+        0x42, 0x20, // i64.const 32
         0x88, // i64.shr_u
         0xa7 // i32.wrap_i64
       );
@@ -586,13 +574,11 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
   if (sig[0] === "j") {
     convert_code.push(
       0xad, // i64.extend_i32_unsigned
-      0x10,
-      0x00 // Call function 0 (r)
+      0x10, 0x00 // Call function 0 (r)
     );
     convert_code.push(
       0xac, // i64.extend_i32_signed
-      0x42,
-      0x20, // i64.const 32
+      0x42, 0x20, // i64.const 32
       0x86, // i64.shl,
       0x84 // i64.or
     );
