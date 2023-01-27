@@ -17,7 +17,6 @@ jobs:
       - checkout
       - run:
           name: install emsdk
-          no_output_timeout: 1200
           command: |
             git clone https://github.com/emscripten-core/emsdk.git --depth=1
             cd emsdk
@@ -78,7 +77,6 @@ jobs:
 
       - run:
           name: run tests
-          no_output_timeout: 1200
           command: |
             git reset --hard
             cd testsuite/emscripten/
@@ -107,7 +105,6 @@ jobs:
 
       - run:
           name: run tests
-          no_output_timeout: 1200
           command: |
             source ./emsdk/emsdk_env.sh
             python3 testsuite/emscripten/patch_emcc.py
