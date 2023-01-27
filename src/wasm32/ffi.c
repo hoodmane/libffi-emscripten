@@ -568,8 +568,7 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
     }
   }
   convert_code.push(
-    0x10,
-    0x01 // call f
+    0x10, 0x01 // call f
   );
   if (sig[0] === "j") {
     convert_code.push(
