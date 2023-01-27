@@ -43,12 +43,17 @@
 
 #if WASM_BIGINT
 EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$convertJsFunctionToWasm");
-#define CALL_FUNCTION_POINTER(ptr, args...) getWasmTableEntry(ptr).apply(null, args)
+#define CALL_FUNCTION_POINTER(ptr, args...) \
+  LOG_DEBUG("CALL_FUNC_PTR", ptr, args); \
+  getWasmTableEntry(ptr).apply(null, args)
 #else
 EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$convertJsFunctionToWasm,$dynCall,$generateFuncType,$uleb128Encode");
-#define CALL_FUNCTION_POINTER(ptr, args...) dynCall(sig, ptr, args)
+#define CALL_FUNCTION_POINTER(ptr, args...) \
+  LOG_DEBUG("CALL_FUNC_PTR", sig, ptr, args); \
+  dynCall(sig, ptr, args)
 #endif
 
+// Signature calculations are not needed if WASM_BIGINT is present.
 #if WASM_BIGINT
 #define SIG(sig)
 #else
@@ -434,7 +439,7 @@ ffi_call_helper, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
     DEREF_U64(rvalue, 0) = result;
     #else
     DEREF_U32(rvalue, 0) = result;
-    DEREF_U32(rvalue, 1) = Module['getTempRet0']();
+    DEREF_U32(rvalue, 1) = Module.getTempRet0();
     #endif
     break;
   case FFI_TYPE_COMPLEX:
@@ -479,6 +484,14 @@ ffi_closure_free(void *closure) {
 
 #if !WASM_BIGINT
 
+// When !WASM_BIGINT, we assume there is no JS bigint integration, so JavaScript
+// functions cannot take 64 bit integer arguments.
+//
+// We need to make our own wasm legalizer adaptor that splits 64 bit integer
+// arguments and then calls the JavaScript trampoline, then the JavaScript
+// trampoline reassembles them, calls the closure, then splits the result (if
+// it's a 64 bit integer) and the adaptor puts it back together.
+// 
 // This is basically the reverse of the Emscripten function
 // createDyncallWrapper.
 EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
@@ -560,8 +573,8 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
       localGet(i - 1);
       convert_code.push(
         0x42, 0x20, // i64.const 32
-        0x88, // i64.shr_u
-        0xa7 // i32.wrap_i64
+        0x88,       // i64.shr_u
+        0xa7        // i32.wrap_i64
       );
     } else {
       localGet(i - 1);
@@ -571,11 +584,12 @@ EM_JS(void, createLegalizerWrapper, (int trampoline, int sig), {
     0x10, 0x01 // call f
   );
   if (sig[0] === "j") {
+    // Need to reassemble a 64 bit integer. Lower 32 bits is on stack. Upper 32
+    // bits we get from getTempRet0
     convert_code.push(
       0xad, // i64.extend_i32_unsigned
-      0x10, 0x00 // Call function 0 (r)
-    );
-    convert_code.push(
+      0x10, 0x00 // Call function 0 (r = getTempRet0)
+      // join lower 32 bits and upper 32 bits
       0xac, // i64.extend_i32_signed
       0x42, 0x20, // i64.const 32
       0x86, // i64.shl,
@@ -782,6 +796,7 @@ ffi_prep_closure_loc_helper,
         #if WASM_BIGINT
         DEREF_U64(cur_ptr, 0) = cur_arg;
         #else
+        // Bigint arg was split by legalizer adaptor
         DEREF_U32(cur_ptr, 0) = cur_arg;
         cur_arg = args[jsarg_idx++];
         DEREF_U32(cur_ptr, 1) = cur_arg;
@@ -795,6 +810,7 @@ ffi_prep_closure_loc_helper,
         cur_arg = args[jsarg_idx++];
         DEREF_U64(cur_ptr, 1) = cur_arg;
         #else
+        // Was split by legalizer adaptor
         DEREF_U32(cur_ptr, 0) = cur_arg;
         cur_arg = args[jsarg_idx++];
         DEREF_U32(cur_ptr, 1) = cur_arg;
@@ -850,6 +866,8 @@ ffi_prep_closure_loc_helper,
         #if WASM_BIGINT
         return DEREF_U64(ret_ptr, 0);
         #else
+        // Split the return i64, set the upper 32 bits into tempRet0 and return
+        // the lower 32 bits.
         setTempRet0(DEREF_U32(ret_ptr, 1));
         return DEREF_U32(ret_ptr, 0);
         #endif
