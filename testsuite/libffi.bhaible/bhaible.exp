@@ -51,7 +51,9 @@ proc check_effective_target_emscripten_firsttest { } {
     # If WASM_BIGINT is true, then we don't need to xfail the -O0 test.
     global optflag
     global wasmbigint
+    puts "wasmbigint: $wasmbigint optflag: $optflag"
     if { $wasmbigint == "true" && $optflag == "-O0" } {
+        puts "wasmbigint && optflag"
         return false
     }
     global should_xfail_emscripten_firsttest
