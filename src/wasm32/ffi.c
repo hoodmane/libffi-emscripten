@@ -671,6 +671,93 @@ ffi_prep_closure_loc_js,
   var nfixedargs = CIF__NFIXEDARGS(cif);
   var arg_types_ptr = CIF__ARGTYPES(cif);
   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
+  var rtype_ptr = rtype_unboxed[0];
+  var rtype_id = rtype_unboxed[1];
+
+  // First construct the signature of the javascript trampoline we are going to create.
+  // Important: this is the signature for calling us, the onward call always has sig viiii.
+  var sig;
+  var ret_by_arg = false;
+  switch (rtype_id) {
+  case FFI_TYPE_VOID:
+    sig = 'v';
+    break;
+  case FFI_TYPE_STRUCT:
+  case FFI_TYPE_LONGDOUBLE:
+    // Return via a first pointer argument.
+    sig = 'vi';
+    ret_by_arg = true;
+    break;
+  case FFI_TYPE_INT:
+  case FFI_TYPE_UINT8:
+  case FFI_TYPE_SINT8:
+  case FFI_TYPE_UINT16:
+  case FFI_TYPE_SINT16:
+  case FFI_TYPE_UINT32:
+  case FFI_TYPE_SINT32:
+  case FFI_TYPE_POINTER:
+    sig = 'i';
+    break;
+  case FFI_TYPE_FLOAT:
+    sig = 'f';
+    break;
+  case FFI_TYPE_DOUBLE:
+    sig = 'd';
+    break;
+  case FFI_TYPE_UINT64:
+  case FFI_TYPE_SINT64:
+    sig = 'j';
+    break;
+  case FFI_TYPE_COMPLEX:
+    throw new Error('complex ret marshalling nyi');
+  default:
+    throw new Error('Unexpected rtype ' + rtype_id);
+  }
+  var unboxed_arg_type_id_list = [];
+  var unboxed_arg_type_info_list = [];
+  for (var i = 0; i < nargs; i++) {
+    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
+    var arg_type_ptr = arg_unboxed[0];
+    var arg_type_id = arg_unboxed[1];
+    unboxed_arg_type_id_list.push(arg_type_id);
+    unboxed_arg_type_info_list.push([FFI_TYPE__SIZE(arg_type_ptr), FFI_TYPE__ALIGN(arg_type_ptr)]);
+  }
+  for (var i = 0; i < nfixedargs; i++) {
+    switch (unboxed_arg_type_id_list[i]) {
+    case FFI_TYPE_INT:
+    case FFI_TYPE_UINT8:
+    case FFI_TYPE_SINT8:
+    case FFI_TYPE_UINT16:
+    case FFI_TYPE_SINT16:
+    case FFI_TYPE_UINT32:
+    case FFI_TYPE_SINT32:
+    case FFI_TYPE_POINTER:
+    case FFI_TYPE_STRUCT:
+      sig += 'i';
+      break;
+    case FFI_TYPE_FLOAT:
+      sig += 'f';
+      break;
+    case FFI_TYPE_DOUBLE:
+      sig += 'd';
+      break;
+    case FFI_TYPE_LONGDOUBLE:
+      sig += 'jj';
+      break;
+    case FFI_TYPE_UINT64:
+    case FFI_TYPE_SINT64:
+      sig += 'j';
+      break;
+    case FFI_TYPE_COMPLEX:
+      throw new Error('complex marshalling nyi');
+    default:
+      throw new Error('Unexpected argtype ' + arg_type_id);
+    }
+  }
+  if (nfixedargs < nargs) {
+    // extra pointer to varargs stack
+    sig += "i";
+  }
   LOG_DEBUG("CREATE_CLOSURE",  "sig:", sig);
   function trampoline() {
     var args = Array.prototype.slice.call(arguments);
