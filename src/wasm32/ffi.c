@@ -189,8 +189,7 @@ unbox_small_structs, (ffi_type type_ptr), {
 
 EM_JS_MACROS(
 void,
-ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
-{
+ffi_call_js_prepare_args, (int cif, int rvalue, int avalue) , {
   var abi = CIF__ABI(cif);
   var nargs = CIF__NARGS(cif);
   var nfixedargs = CIF__NFIXEDARGS(cif);
@@ -198,8 +197,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
   var rtype_ptr = rtype_unboxed[0];
   var rtype_id = rtype_unboxed[1];
-  var orig_stack_ptr = stackSave();
-  var cur_stack_ptr = orig_stack_ptr;
+  var cur_stack_ptr = stackSave();
 
   var args = [];
   // Does our onwards call return by argument or normally? We return by argument
@@ -421,16 +419,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
   }
   stackRestore(cur_stack_ptr);
   stackAlloc(0); // stackAlloc enforces alignment invariants on the stack pointer
-  var result = CALL_FUNCTION_POINTER(fn, args);
-  // Put the stack pointer back (we moved it if there were any struct args or we
-  // made a varargs call)
-  stackRestore(orig_stack_ptr);
+  return {args, rtype_id, ret_by_arg};
+}
+)
 
-  // We need to return by argument. If return value was a nontrivial struct or
-  // long double, the onwards call already put the return value in rvalue
-  if (ret_by_arg) {
-    return;
-  }
+EM_JS_MACROS(void, ffi_call_js_set_rvalue, (int rtype_id, int rvalue, int result), {
 
   // Otherwise the result was automatically converted from C into Javascript and
   // we need to manually convert it back to C.
@@ -471,6 +464,23 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
   default:
     throw new Error('Unexpected rtype ' + rtype_id);
   }
+})
+
+EM_JS_MACROS(
+void,
+ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+{
+  var orig_stack_ptr = stackSave();
+  var args = ffi_call_js_prepare_args(cif, rvalue, avalue);
+  const {args, rtype_id, ret_by_arg} = CALL_FUNCTION_POINTER(fn, args);
+  stackRestore(orig_stack_ptr);
+
+  // We need to return by argument. If return value was a nontrivial struct or
+  // long double, the onwards call already put the return value in rvalue
+  if (ret_by_arg) {
+    return;
+  }
+  ffi_call_js_set_rvalue(rtype_id, rvalue, result);
 });
 
 void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue) {
@@ -661,93 +671,6 @@ ffi_prep_closure_loc_js,
   var nfixedargs = CIF__NFIXEDARGS(cif);
   var arg_types_ptr = CIF__ARGTYPES(cif);
   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
-  var rtype_ptr = rtype_unboxed[0];
-  var rtype_id = rtype_unboxed[1];
-
-  // First construct the signature of the javascript trampoline we are going to create.
-  // Important: this is the signature for calling us, the onward call always has sig viiii.
-  var sig;
-  var ret_by_arg = false;
-  switch (rtype_id) {
-  case FFI_TYPE_VOID:
-    sig = 'v';
-    break;
-  case FFI_TYPE_STRUCT:
-  case FFI_TYPE_LONGDOUBLE:
-    // Return via a first pointer argument.
-    sig = 'vi';
-    ret_by_arg = true;
-    break;
-  case FFI_TYPE_INT:
-  case FFI_TYPE_UINT8:
-  case FFI_TYPE_SINT8:
-  case FFI_TYPE_UINT16:
-  case FFI_TYPE_SINT16:
-  case FFI_TYPE_UINT32:
-  case FFI_TYPE_SINT32:
-  case FFI_TYPE_POINTER:
-    sig = 'i';
-    break;
-  case FFI_TYPE_FLOAT:
-    sig = 'f';
-    break;
-  case FFI_TYPE_DOUBLE:
-    sig = 'd';
-    break;
-  case FFI_TYPE_UINT64:
-  case FFI_TYPE_SINT64:
-    sig = 'j';
-    break;
-  case FFI_TYPE_COMPLEX:
-    throw new Error('complex ret marshalling nyi');
-  default:
-    throw new Error('Unexpected rtype ' + rtype_id);
-  }
-  var unboxed_arg_type_id_list = [];
-  var unboxed_arg_type_info_list = [];
-  for (var i = 0; i < nargs; i++) {
-    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
-    var arg_type_ptr = arg_unboxed[0];
-    var arg_type_id = arg_unboxed[1];
-    unboxed_arg_type_id_list.push(arg_type_id);
-    unboxed_arg_type_info_list.push([FFI_TYPE__SIZE(arg_type_ptr), FFI_TYPE__ALIGN(arg_type_ptr)]);
-  }
-  for (var i = 0; i < nfixedargs; i++) {
-    switch (unboxed_arg_type_id_list[i]) {
-    case FFI_TYPE_INT:
-    case FFI_TYPE_UINT8:
-    case FFI_TYPE_SINT8:
-    case FFI_TYPE_UINT16:
-    case FFI_TYPE_SINT16:
-    case FFI_TYPE_UINT32:
-    case FFI_TYPE_SINT32:
-    case FFI_TYPE_POINTER:
-    case FFI_TYPE_STRUCT:
-      sig += 'i';
-      break;
-    case FFI_TYPE_FLOAT:
-      sig += 'f';
-      break;
-    case FFI_TYPE_DOUBLE:
-      sig += 'd';
-      break;
-    case FFI_TYPE_LONGDOUBLE:
-      sig += 'jj';
-      break;
-    case FFI_TYPE_UINT64:
-    case FFI_TYPE_SINT64:
-      sig += 'j';
-      break;
-    case FFI_TYPE_COMPLEX:
-      throw new Error('complex marshalling nyi');
-    default:
-      throw new Error('Unexpected argtype ' + arg_type_id);
-    }
-  }
-  if (nfixedargs < nargs) {
-    // extra pointer to varargs stack
-    sig += "i";
-  }
   LOG_DEBUG("CREATE_CLOSURE",  "sig:", sig);
   function trampoline() {
     var args = Array.prototype.slice.call(arguments);
