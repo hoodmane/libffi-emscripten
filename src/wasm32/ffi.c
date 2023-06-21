@@ -466,25 +466,35 @@ EM_JS_MACROS(void, ffi_call_js_set_rvalue, (int rtype_id, int rvalue, int result
   }
 })
 
-EM_JS_MACROS(
-void,
-ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
-{
-  var orig_stack_ptr = stackSave();
-  var args = ffi_call_js_prepare_args(cif, rvalue, avalue);
-  const {args, rtype_id, ret_by_arg} = CALL_FUNCTION_POINTER(fn, args);
-  stackRestore(orig_stack_ptr);
+typedef void FfiCallType(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue);
 
-  // We need to return by argument. If return value was a nontrivial struct or
-  // long double, the onwards call already put the return value in rvalue
-  if (ret_by_arg) {
-    return;
+FfiCallType* ffi_call_ptr = NULL;
+
+EM_JS_MACROS(
+FfiCallType*,
+ffi_call_get_ptr, (),
+{
+  function * call_generator(cif, fn, rvalue, avalue) {
+    var orig_stack_ptr = stackSave();
+    const {args, rtype_id, ret_by_arg} = ffi_call_js_prepare_args(cif, rvalue, avalue);
+    const result = yield [fn, args];
+    stackRestore(orig_stack_ptr);
+
+    // We need to return by argument. If return value was a nontrivial struct or
+    // long double, the onwards call already put the return value in rvalue
+    if (ret_by_arg) {
+      return;
+    }
+    ffi_call_js_set_rvalue(rtype_id, rvalue, result);
   }
-  ffi_call_js_set_rvalue(rtype_id, rvalue, result);
+  return addFunction(getHandlerFn(call_generator, "viiii"));
 });
 
 void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue) {
-  ffi_call_js(cif, fn, rvalue, avalue);
+  if(ffi_call_ptr == NULL) {
+    ffi_call_ptr = ffi_call_get_ptr();
+  }
+  ffi_call_ptr(cif, fn, rvalue, avalue);
 }
 
 CHECK_FIELD_OFFSET(ffi_closure, ftramp, 4*0);
@@ -759,7 +769,7 @@ ffi_prep_closure_loc_js,
     sig += "i";
   }
   LOG_DEBUG("CREATE_CLOSURE",  "sig:", sig);
-  function trampoline() {
+  function *trampoline() {
     var args = Array.prototype.slice.call(arguments);
     var size = 0;
     var orig_stack_ptr = stackSave();
@@ -893,10 +903,9 @@ ffi_prep_closure_loc_js,
     stackRestore(cur_ptr);
     stackAlloc(0); // stackAlloc enforces alignment invariants on the stack pointer
     LOG_DEBUG("CALL_CLOSURE",  "closure:", closure, "fptr", CLOSURE__fun(closure), "cif",  CLOSURE__cif(closure));
-    getWasmTableEntry(CLOSURE__fun(closure))(
-        CLOSURE__cif(closure), ret_ptr, args_ptr,
-        CLOSURE__user_data(closure)
-    );
+    yield [CLOSURE__fun(closure),
+        [CLOSURE__cif(closure), ret_ptr, args_ptr,
+        CLOSURE__user_data(closure)]];
     stackRestore(orig_stack_ptr);
 
     // If we aren't supposed to return by argument, figure out what to return.
@@ -920,8 +929,9 @@ ffi_prep_closure_loc_js,
       }
     }
   }
+
   try {
-    var wasm_trampoline = JS_FUNCTION_TO_WASM(trampoline, sig);
+    var wasm_trampoline = Module.getHandlerFn(closure, "v" + "i".repeat(nfixedargs + (nfixedargs !== nargs)));
   } catch(e) {
     return FFI_BAD_TYPEDEF_MACRO;
   }
